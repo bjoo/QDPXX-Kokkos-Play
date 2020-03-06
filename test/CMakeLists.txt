@@ -32,7 +32,9 @@ macro(package_add_test TESTNAME)
 
     # Add the test to CTest
     add_test(NAME ${TESTNAME} COMMAND ${TESTNAME})
-
+	target_include_directories(${TESTNAME} PUBLIC ${PROJECT_SOURCE_DIR}/include
+		PUBLIC ${PROJECT_BUILD_DIR}/include)
+		
     # I am not 100% sure what tis is for but it is a property
     set_target_properties(${TESTNAME} PROPERTIES FOLDER tests)
   
