@@ -10,82 +10,79 @@
 
 #include <cstddef>
 #include <array>
+
 namespace Playground {
 
-#if 0
-template<typename T>
-struct BaseTypeOf;
+// The IndexOrderLeft and IndexOrderRight
+// basically generate the necessary offsets for left and right
+// indexing. The trick to them is that they are recursive.
+// They thus need info from the parent ( an offset and a scale to use )
+// and in some cases the dimensions.
 
-template<>
-struct BaseTypeOf<float> {
-	using Type_t = float;
-};
-
-template<>
-struct BaseTypeOf<double> {
-	using Type_t = double;
-};
-
-
-/* Forward declare this */
-template<typename T, typename IndexOrder>
-class OLatticeView;
-
-template<typename T, typename IndexOrder>
-struct BaseTypeOf<OLatticeView<T,IndexOrder>> {
-	using Type_t = typename BaseTypeOf<T>::Type_t;
-};
-
-#endif
+// Not all the same data is used in IndexOrderLeft and IndexOrderRight
+// but to aid duck-typing and keeping function signatures the same, the
+// member functions all have similar signatures
 
 template<int dim>
 class IndexOrderLeft {
 private:
-	std::size_t parent_offset_;
-	std::size_t parent_scale_;
-	std::array<size_t,dim> my_dims_;
+	const std::size_t parent_offset_;
+	const std::size_t parent_scale_;
+	const std::array<size_t,dim> my_dims_;
+	std::size_t child_scale_;
 public:
 	explicit IndexOrderLeft( std::size_t parent_offset,
 							 std::size_t parent_scale,
 							 std::array<size_t,dim> my_dims,
 							 std::size_t prod_rest_of_sizes) : parent_offset_(parent_offset),
 							 	 	 	 	 	 	parent_scale_(parent_scale),
-													my_dims_(my_dims) {};
+													my_dims_(my_dims) {
+		child_scale_= parent_scale_;
+		for(int i=0; i<dim; ++i) child_scale_ *= my_dims_[i];
 
+	};
 
-	inline std::size_t offset(std::size_t index ) const {
+	// Linear Offsets
+	inline
+	std::size_t offset(std::size_t index ) const {
 		return parent_offset_ + parent_scale_*index;
 	}
 
-	inline std::size_t offset(std::size_t row, std::size_t col) const {
+
+	// Matrix Offsets
+	inline
+	std::size_t offset(std::size_t row, std::size_t col) const {
 		return parent_offset_ + parent_scale_*(row + my_dims_[0]*col);
 
 	}
 
-	inline std::size_t child_offset( std::size_t index ) const {
+	// Linear Child Offsets
+	inline
+	std::size_t child_offset( std::size_t index ) const {
 		return (*this).offset(index);
 
 	}
 
-	inline std::size_t child_offset( std::size_t row, std::size_t col ) const {
-			return (*this).offset(row,col);
-
+	// Matrix Child offset
+	inline
+	std::size_t child_offset( std::size_t row, std::size_t col ) const {
+		// offset takes care of any row/col swapping
+		return (*this).offset(row,col);
 	}
 
-	inline std::size_t child_scale() const {
-		std::size_t child_scale = parent_scale_;
-		for(int i=0; i<dim; ++i) child_scale *= my_dims_[i];
-		return child_scale;
+	// Child Scaling
+	inline
+	std::size_t child_scale() const {
+		return child_scale_;
 	}
 };
 
-#if 1
 template<int dim>
 class IndexOrderRight {
 private:
-	std::size_t offset_;
-	std::size_t scale_;
-	std::array<std::size_t,dim> my_dims_;
+	const std::size_t offset_;
+	const std::size_t scale_;
+	const std::array<std::size_t,dim> my_dims_;
 public:
 	explicit IndexOrderRight( std::size_t parent_offset,
 							  std::size_t parent_scale,
@@ -94,32 +91,37 @@ public:
 							 	 	 	 	 	 	scale_(prod_rest_of_sizes),
 													my_dims_(my_dims){};
 
+	// Linear Offsets
 	inline std::size_t offset(std::size_t index ) const {
 		return offset_ + scale_*index;
 	}
 
-#if 1
+	// Matrix Offsets
 	inline std::size_t offset(std::size_t row, std::size_t col) const {
-		return offset_ + scale_*(col + my_dims_[1]*row);
+		return offset_  + scale_*(col + my_dims_[0]*row);
 	}
-#endif
 
+	// Linear Child Offset
 	inline std::size_t child_offset( std::size_t index ) const {
 		return (*this).offset(index);
 
 	}
 
+	// Matrix Child offset
 	inline std::size_t child_offset( std::size_t row, std::size_t col ) const {
-			return (*this).offset(row,col);
+		// Offset flips row/col for appropriate runnign
+		return (*this).offset(row,col);
 	}
 
+	// Child scale. Layout right, so children will run fast.
 	inline std::size_t child_scale() const {
 		return 1;
 	}
 };
-#endif
 
-
+// T has to be a view: It should have a constructor signature:
+//  T(child_offset, child_scale)
+//  T::total_size() statically
 template<typename T, typename IndexOrder>
 class OLatticeView {
 private:
@@ -131,17 +133,28 @@ public:
 	explicit OLatticeView(std::size_t size) : size_(size), order_(0,1,{size_}, T::total_size()) {}
 
 	/** The number of items of type T */
+	inline
 	std::size_t num_elem() const {
 		return size_;
 	}
 
-	// Give me the offset
+	/** I am the top of the food chain, and my size is variable
+	 * but I still support a non-static total_size() in case you need
+	 * it for allocations etc.
+	 */
+	inline
+	std::size_t total_size() const {
+		return size_*T::total_size();
+	}
+
+	/** Give me the offset for index */
 	inline
 	std::size_t offset(std::size_t index) const {
 		return order_.offset(index);
 	}
 
-	// Subview
+	/** Give me the subview (i.e. T) for index i */
+	inline
 	T subview(std::size_t i) const {
 		T ret_val(order_.child_offset(i), order_.child_scale());
 		return ret_val;
@@ -149,29 +162,83 @@ public:
 }; // Class
 
 
+/** RScalarView is always a recursive base case: it just stores the offset to its element
+ *  it does not support subview() as it has no substructure. Likewise it does not need an Index
+ *  order since it has no indices. We don't need to keep the type of data being referenced, that
+ *  is in the buffer. We only do indexing
+ */
 class RScalarView {
 private:
 	const std::size_t offset_;
 public:
 	explicit RScalarView( std::size_t parent_offset, std::size_t scale) : offset_(parent_offset) {}
 
+	/* I am the one and only */
 	inline
 	std::size_t num_elem() const {
 		return 1;
 	}
 
-
+	/* I have no substructure, so I am the one and only */
 	static constexpr
 	std::size_t total_size() {
 		return 1;
 	}
 
+	/* Give back the offset people want so bad */
+	inline
 	std::size_t offset() const {
 		return offset_;
 	}
 };
 
+/** I am a complex number, which means I am a recursive base case,
+ *  so I have no substructure (no subview). In other respects I behave
+ *  like a PVector with two fixed elements, so I need an index order
+ */
+template<typename IndexOrder>
+class RComplexView {
+private:
+	const IndexOrder order_;
+public:
+	explicit RComplexView( std::size_t parent_offset, std::size_t scale ) :
+		order_(parent_offset, scale, {2}, 1) {}
 
+	/* I hold two numbers */
+	inline constexpr
+	std::size_t num_elem() const {
+		return 2;
+	}
+
+	/* I have no substructure, so my total elements is also 2 */
+	static constexpr
+	std::size_t total_size() {
+		return 2;
+	}
+
+	/** Offset to the real part */
+	inline
+	std::size_t offsetReal() const {
+		return order_.offset(0);
+	}
+
+	/** Offset to imaginary part */
+	inline
+	std::size_t offsetImag() const {
+		return order_.offset(1);
+	}
+
+	/* Do I want to do an offset() with an index?
+	 * Guess it can't hurt. Caveat emptor... this needs to be 0 or 1
+	 */
+	inline
+	std::size_t offset(std::size_t reim) const {
+		return order_.offset(reim);
+	}
+};
+
+
+/* I am a fixed size vector */
 template<typename T, int N, typename IndexOrder>
 class PVectorView {
 private:
@@ -180,7 +247,8 @@ public:
 	explicit PVectorView( std::size_t parent_offset, std::size_t scale ) :
 		order_(parent_offset, scale, {N}, T::total_size()) {}
 
-	inline
+
+	inline constexpr
 	std::size_t num_elem() const {
 		return N;
 	}
@@ -190,16 +258,19 @@ public:
 		return N*T::total_size();
 	}
 
+	inline
 	std::size_t offset(std::size_t index) const {
 		return order_.offset(index);
 	}
 
+	inline
 	T subview(std::size_t i) {
 		T ret_val(order_.child_offset(i), order_.child_scale());
 		return ret_val;
 	}
 };
 
+/** I am a fixed sized square matrix */
 template<typename T, int N, typename IndexOrder>
 class PMatrixView {
 private:
@@ -208,7 +279,7 @@ public:
 	explicit PMatrixView( std::size_t parent_offset, std::size_t scale ) :
 		order_(parent_offset, scale, {N,N}, T::total_size()) {}
 
-	inline
+	inline constexpr
 	std::size_t num_elem() const {
 		return N*N;
 	}
@@ -218,10 +289,12 @@ public:
 		return N*N*T::total_size();
 	}
 
+	inline
 	std::size_t offset(std::size_t row, std::size_t col) const {
 		return order_.offset(row,col);
 	}
 
+	inline
 	T subview(std::size_t row, std::size_t col) const {
 		T ret_val(order_.child_offset(row,col), order_.child_scale());
 		return ret_val;

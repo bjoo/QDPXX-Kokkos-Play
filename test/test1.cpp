@@ -26,7 +26,7 @@ TEST(Play, TestCreateLatVectorScalarLeft)
 
 }
 
-#if 1
+
 TEST(Play, TestCreateLatMatScalarLeft)
 {
 	OLatticeView< PMatrixView< RScalarView, 3, IndexOrderLeft<2>>, IndexOrderLeft<1>> lat3vec(16);
@@ -40,10 +40,8 @@ TEST(Play, TestCreateLatMatScalarLeft)
 		}
 	}
 }
-#endif
 
-#if 1
-TEST(Play, TestCreatePropViewLeft)
+TEST(Play, TestCreateMatMatViewLeft)
 {
 	OLatticeView<PMatrixView<PMatrixView<RScalarView, 3, IndexOrderLeft<2>>, 4, IndexOrderLeft<2>>,IndexOrderLeft<1>> lat3vec(16);
 
@@ -63,9 +61,52 @@ TEST(Play, TestCreatePropViewLeft)
 		}
 	}
 }
-#endif
-#if 1
-using namespace Playground;
+
+TEST(Play, TestCreatePropViewLeft)
+{
+	OLatticeView<PMatrixView<PMatrixView<RComplexView<IndexOrderLeft<1>>, 3, IndexOrderLeft<2>>, 4, IndexOrderLeft<2>>,IndexOrderLeft<1>> lat3vec(16);
+
+	for(int site=0; site < 16; ++site) {
+		for(int srow=0; srow < 4; ++srow) {
+		  for(int scol=0; scol < 4; ++scol ) {
+
+		     for(int crow=0; crow < 3; ++crow) {
+			   for(int ccol=0; ccol < 3; ++ccol) {
+
+				 ASSERT_EQ( lat3vec.subview(site).subview(srow,scol).subview(crow,ccol).offsetReal(),
+						 site+16*(srow + 4*(scol + 4*(crow +3*(ccol + 3*0)))) );
+				 ASSERT_EQ( lat3vec.subview(site).subview(srow,scol).subview(crow,ccol).offsetImag(),
+				 		site+16*(srow + 4*(scol + 4*(crow +3*(ccol + 3*1)))) );
+			   }
+		     }
+		  }
+		}
+	}
+}
+
+TEST(Play, TestCreatePropViewLeft2)
+{
+	OLatticeView<PMatrixView<PMatrixView<RComplexView<IndexOrderLeft<1>>, 3, IndexOrderLeft<2>>, 4, IndexOrderLeft<2>>,IndexOrderLeft<1>> lat3vec(16);
+
+	for(int site=0; site < 16; ++site) {
+		for(int srow=0; srow < 4; ++srow) {
+		  for(int scol=0; scol < 4; ++scol ) {
+
+		     for(int crow=0; crow < 3; ++crow) {
+			   for(int ccol=0; ccol < 3; ++ccol) {
+
+				 ASSERT_EQ( lat3vec.subview(site).subview(srow,scol).subview(crow,ccol).offset(0),
+						 site+16*(srow + 4*(scol + 4*(crow +3*(ccol + 3*0)))) );
+				 ASSERT_EQ( lat3vec.subview(site).subview(srow,scol).subview(crow,ccol).offset(1),
+				 		site+16*(srow + 4*(scol + 4*(crow +3*(ccol + 3*1)))) );
+			   }
+		     }
+		  }
+		}
+	}
+}
+
+
 TEST(Play, TestCreateLatScalarRight)
 {
 
@@ -88,9 +129,8 @@ TEST(Play, TestCreateLatVectorScalarRight)
 	}
 
 }
-#endif
 
-#if 1
+
 TEST(Play, TestCreateLatMatScalarRight)
 {
 	OLatticeView< PMatrixView< RScalarView, 3, IndexOrderRight<2>>, IndexOrderRight<1>> lat3vec(16);
@@ -104,9 +144,9 @@ TEST(Play, TestCreateLatMatScalarRight)
 		}
 	}
 }
-#endif
 
-TEST(Play, TestCreatePropViewRight)
+
+TEST(Play, TestCreateMatMatViewRight)
 {
 	OLatticeView<PMatrixView<PMatrixView<RScalarView, 3, IndexOrderRight<2>>, 4, IndexOrderRight<2>>,
 	IndexOrderRight<1>> lat3vec(16);
@@ -121,6 +161,50 @@ TEST(Play, TestCreatePropViewRight)
 						 ccol + 3*(crow + 3*(scol + 4*(srow + 4*site))));
 				 ASSERT_EQ( lat3vec.subview(site).subview(srow,scol).subview(crow,ccol).offset(),
 						 ccol + 3*(crow + 3*(scol + 4*(srow + 4*site))));
+			   }
+		     }
+		  }
+		}
+	}
+}
+
+TEST(Play, TestCreatePropViewRight)
+{
+	OLatticeView<PMatrixView<PMatrixView<RComplexView<IndexOrderRight<1>>, 3, IndexOrderRight<2>>, 4, IndexOrderRight<2>>,
+	IndexOrderRight<1>> lat3vec(16);
+
+	for(int site=0; site < 16; ++site) {
+		for(int srow=0; srow < 4; ++srow) {
+		  for(int scol=0; scol < 4; ++scol ) {
+
+		     for(int crow=0; crow < 3; ++crow) {
+			   for(int ccol=0; ccol < 3; ++ccol) {
+				 ASSERT_EQ( lat3vec.subview(site).subview(srow,scol).subview(crow,ccol).offsetReal(),
+						 0 + 2*(ccol + 3*(crow + 3*(scol + 4*(srow + 4*site)))));
+				 ASSERT_EQ( lat3vec.subview(site).subview(srow,scol).subview(crow,ccol).offsetImag(),
+						 1 + 2*(ccol + 3*(crow + 3*(scol + 4*(srow + 4*site)))));
+			   }
+		     }
+		  }
+		}
+	}
+}
+
+TEST(Play, TestCreatePropViewRight2)
+{
+	OLatticeView<PMatrixView<PMatrixView<RComplexView<IndexOrderRight<1>>, 3, IndexOrderRight<2>>, 4, IndexOrderRight<2>>,
+	IndexOrderRight<1>> lat3vec(16);
+
+	for(int site=0; site < 16; ++site) {
+		for(int srow=0; srow < 4; ++srow) {
+		  for(int scol=0; scol < 4; ++scol ) {
+
+		     for(int crow=0; crow < 3; ++crow) {
+			   for(int ccol=0; ccol < 3; ++ccol) {
+				 ASSERT_EQ( lat3vec.subview(site).subview(srow,scol).subview(crow,ccol).offset(0),
+						 0 + 2*(ccol + 3*(crow + 3*(scol + 4*(srow + 4*site)))));
+				 ASSERT_EQ( lat3vec.subview(site).subview(srow,scol).subview(crow,ccol).offset(1),
+						 1 + 2*(ccol + 3*(crow + 3*(scol + 4*(srow + 4*site)))));
 			   }
 		     }
 		  }
