@@ -1,14 +1,30 @@
-CMakeShell
-==========
+QDPXXKokkosPlay
+===============
 
-This is a sample C++ project shell you can use for a CMake
-project. It has
+Playpen for Kokkos/QDP things.
 
-  * Googletest as a submodule in the ``extern`` directory
-  * A library and headers in the ``include`` directory
-  * A generated (configured) header 
-  * A CMakeConfig.cmake.in file to allow you to export targets to other CMake Project
-  * Allow you to build in stall the file
+To build.
 
+```mkdir ./workspace
+   cd workspace
+   mkdir src
+   cd src
+   git clone --recursive https://github.com/bjoo/QDPXXKokkosPlay.git 
+   cd ../..
+   # edit env.sh to set up your fave compiler like clang
+   cp src/QDPXXKokkosPlay/env.sh .
 
-Please feel free to add your own code. Remember to rename the projct etc.
+   # This will do the building
+   cp src/QDPXXKokkosPlay/build.sh .
+
+   # Make sure you have a recent CMake available (3.13 at least)
+   # Make a build directory
+   mkdir build
+
+   # Do the build
+   ./build.sh
+   
+   # Run the tests
+   cd ./build/tests
+   ./test1
+```
