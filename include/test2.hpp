@@ -45,7 +45,7 @@ struct ILattice {
 	// Custom creation allows passing in a view
 	explicit ILattice(view_type subview_of_parent) : _data(subview_of_parent) {}
 
-
+	KOKKOS_INLINE_FUNCTION
 	T& elem(Index i) const {
 		return _data(i);
 	}
@@ -87,6 +87,7 @@ struct RScalar {
 		return _data;
 	}
 
+	KOKKOS_INLINE_FUNCTION
 	T& elem() {
 		return _data;
 	}
@@ -120,7 +121,10 @@ struct RComplex {
 			T(Kokkos::subview(in,1,Kokkos::ALL)) } {}
 
 
+	KOKKOS_INLINE_FUNCTION
 	T& real() const { return _data[0]; }
+
+	KOKKOS_INLINE_FUNCTION
 	T& imag() const { return _data[1]; }
 
 };
@@ -152,8 +156,14 @@ struct PVector {
 
 	explicit PVector(view_type in) {
 		for(int i=0; i < N; ++i) {
-			// This is ugly -- use if constexpr to pick the right one.
+			// This is ugly. I don't actually know how many sub-levels there are
+			// without counting (ie calling num_dims() on T )
 			//
+			// But I know that there are at most 8 indices in Kokkos
+			// so at most 7 below me
+			//
+			// Fortunately: num_dims() is constexpr so I can use if-constexpr
+			// and only the one that matches will be compiled -- the rest should be ditched.
 			if constexpr( T::num_dims() == 2 ) {
 				_data[i] = T( Kokkos::subview(in,i,Kokkos::ALL, Kokkos::ALL));
 			}
@@ -183,7 +193,7 @@ struct PVector {
 			}
 		}}
 
-
+	KOKKOS_INLINE_FUNCTION
 	T& elem(Index i) const { return _data[i]; }
 };
 
@@ -214,9 +224,15 @@ struct PMatrix {
 	explicit PMatrix(view_type in) {
 		for(int j=0; j < N; ++j) {
 		 for(int i=0; i < N; ++i) {
-			// This is ugly -- use if constexpr to pick the right one.
-			//
-			if constexpr( T::num_dims() == 2 ) {
+				// This is ugly. I don't actually know how many sub-levels there are
+			 // without counting (ie calling num_dims() on T )
+			 //
+			 // But I know that there are at most 8 indices in Kokkos
+			 // so at most 6 below me since I have 2 indices
+			 //
+			 // Fortunately: num_dims() is constexpr so I can use if-constexpr
+			 // and only the one that matches will be compiled -- the rest should be ditched.
+			 if constexpr( T::num_dims() == 2 ) {
 				_data[i][j] = T( Kokkos::subview(in,i,j,Kokkos::ALL, Kokkos::ALL));
 			}
 
@@ -253,27 +269,34 @@ struct OLattice {
 	using array_type = typename T::array_type*;
 	using base_type = typename T::base_type;
 	using view_type = typename Kokkos::View<array_type,KokkosLayout,MemorySpace>;
+
 	static constexpr
-		KOKKOS_INLINE_FUNCTION
-		Index num_dims()  {
-			return 1+T::num_dims();
-		}
-
-		KOKKOS_INLINE_FUNCTION
-		Index num_elem() const {
-			return _n_sites*T::num_elem();
-		}
-
-
-	view_type _data;
-
-
-	explicit OLattice(const Index n_sites) : _n_sites(n_sites), _data("OLatticeData", n_sites)
-	{
+	KOKKOS_INLINE_FUNCTION
+	Index num_dims()  {
+		return 1+T::num_dims();
 	}
 
+	KOKKOS_INLINE_FUNCTION
+	Index num_elem() const {
+		return _n_sites*T::num_elem();
+	}
 
-	T elem(int i) const {
+	// Doesn't need to be mutable... (I think internally the data in a View already is)
+	view_type _data;
+
+	// Allocate
+	explicit OLattice(const Index n_sites) : _n_sites(n_sites), _data("OLatticeData", n_sites) {}
+
+	// Get site
+	T elem(Index i) const {
+		// This is ugly. I don't actually know how many sub-levels there are
+		// without counting (ie calling num_dims() on T )
+		//
+		// But I know that there are at most 8 indices in Kokkos
+		// so at most 7 below me
+		//
+		// Fortunately: num_dims() is constexpr so I can use if-constexpr
+		// and only the one that matches will be compiled -- the rest should be ditched.
 	   if constexpr ( T::num_dims() == 1 ) {
 		   return T( Kokkos::subview(_data,i, Kokkos::ALL ));
 	   }
