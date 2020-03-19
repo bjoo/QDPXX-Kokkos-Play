@@ -22,6 +22,54 @@ namespace Playground {
 // Not all the same data is used in IndexOrderLeft and IndexOrderRight
 // but to aid duck-typing and keeping function signatures the same, the
 // member functions all have similar signatures
+template<typename T, std::size_t ndims>
+struct KokkosDimensionTrait{};
+
+template<typename T>
+struct KokkosDimensionTrait<T,0> {
+	using Type_t = T;
+};
+
+template<typename T>
+struct KokkosDimensionTrait<T,1> {
+	using Type_t = T*;
+};
+
+template<typename T>
+struct KokkosDimensionTrait<T,2> {
+	using Type_t = T**;
+};
+
+template<typename T>
+struct KokkosDimensionTrait<T,3> {
+	using Type_t = T***;
+};
+
+template<typename T>
+struct KokkosDimensionTrait<T,4> {
+	using Type_t = T****;
+};
+
+template<typename T>
+struct KokkosDimensionTrait<T,5> {
+	using Type_t = T*****;
+};
+
+template<typename T>
+struct KokkosDimensionTrait<T,6> {
+	using Type_t = T******;
+};
+
+template<typename T>
+struct KokkosDimensionTrait<T,7> {
+	using Type_t = T*******;
+};
+
+template<typename T>
+struct KokkosDimensionTrait<T,8> {
+	using Type_t = T********;
+};
+
 
 template<int dim>
 class IndexOrderLeft {
@@ -119,6 +167,10 @@ public:
 	}
 };
 
+
+
+
+
 // T has to be a view: It should have a constructor signature:
 //  T(child_offset, child_scale)
 //  T::total_size() statically
@@ -132,10 +184,22 @@ public:
 	/** Explicit constructor: Just sets the number of elements of type T */
 	explicit OLatticeView(std::size_t size) : size_(size), order_(0,1,{size_}, T::total_size()) {}
 
+	static inline
+	constexpr
+	std::size_t num_dims() {
+		return 1+T::num_dims();
+	}
 	/** The number of items of type T */
 	inline
 	std::size_t num_elem() const {
 		return size_;
+	}
+
+	inline
+	std::array<std::size_t, 8> get_dims() const{
+		std::array<std::size_t, 8> ret_val={num_elem(),1,1,1,1,1,1,1};
+		T::get_dims(ret_val,1);
+		return ret_val;
 	}
 
 	/** I am the top of the food chain, and my size is variable
@@ -174,9 +238,22 @@ public:
 	explicit RScalarView( std::size_t parent_offset, std::size_t scale) : offset_(parent_offset) {}
 
 	/* I am the one and only */
+	constexpr
 	inline
 	std::size_t num_elem() const {
 		return 1;
+	}
+
+	static inline
+	constexpr std::size_t num_dims() {
+		return 0;
+	}
+
+
+	static inline
+	constexpr std::size_t get_dims(std::array<size_t,8>& result,std::size_t index)
+	{
+		return 0;
 	}
 
 	/* I have no substructure, so I am the one and only */
@@ -207,6 +284,19 @@ public:
 	/* I hold two numbers */
 	inline constexpr
 	std::size_t num_elem() const {
+		return 2;
+	}
+
+	static inline
+	constexpr std::size_t num_dims() {
+		return 1;
+	}
+
+
+	static inline
+	constexpr std::size_t get_dims(std::array<size_t,8>& result, int index)
+	{
+		result[index]=2;
 		return 2;
 	}
 
@@ -253,6 +343,19 @@ public:
 		return N;
 	}
 
+	static inline
+	constexpr std::size_t num_dims() {
+		return 1+T::num_dims();
+	}
+
+
+	static inline
+	constexpr std::size_t get_dims(std::array<size_t,8>& result, int index) {
+		result[index] = N;
+		T::get_dims(result, index+1);
+		return 0;
+	}
+
 	static constexpr
 	std::size_t total_size() {
 		return N*T::total_size();
@@ -287,6 +390,19 @@ public:
 	static constexpr
 	std::size_t total_size() {
 		return N*N*T::total_size();
+	}
+
+	static inline
+	constexpr std::size_t num_dims() {
+		return 2+T::num_dims();
+	}
+
+	static inline
+	constexpr std::size_t get_dims(std::array<size_t,8>& result, int index) {
+		result[index] = N;
+		result[index+1] = N;
+		T::get_dims(result, index+2);
+		return 0;
 	}
 
 	inline

@@ -43,3 +43,4 @@ endmacro()
 # Here TESTNAME is test1
 # and ARGN is test1.cpp
 package_add_test(test1 test1.cpp)
+package_add_test(test2 test2.cpp)
