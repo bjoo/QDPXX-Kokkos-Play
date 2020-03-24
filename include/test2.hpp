@@ -6,195 +6,135 @@
  */
 
 #pragma once
+
 #include <Kokkos_Core.hpp>
 
+#define DEBUG
+#ifdef DEBUG
+#include <iostream>
+#define DEBUG_MSG(str)   { std::cout << "DEBUG: " << str << std::endl << std::flush; }
+#else
+#define DEBUG_MSG(str)   {}
+#endif
 
 namespace Playground {
 
 using Index = size_t;
 
 
+template<typename T>
+struct base_type;
 
+template<typename T>
+struct num_dims;
+
+// FLOAT
+template<>
+struct base_type<float> {
+	using type_t = float;
+};
+
+template<>
+struct num_dims<float> {
+	static constexpr Index value=0;
+};
+
+// DOUBLE
+template<>
+struct base_type<double> {
+	using type_t = double;
+};
+
+template<>
+struct num_dims<double> {
+	static constexpr Index value=0;
+};
+
+
+#if 0
 template<typename T, Index N,
 	typename MemorySpace=Kokkos::DefaultExecutionSpace::memory_space,
 	typename KokkosLayout=Kokkos::DefaultExecutionSpace::array_layout>
-struct ILattice {
-
-	static constexpr
-	KOKKOS_INLINE_FUNCTION
-	Index num_dims() {
-		return 1;
-	}
-
-	static constexpr
-	KOKKOS_INLINE_FUNCTION
-	Index num_elem() {
-		return N;
-	}
-
+class ILattice {
+public:
+	using base_type = base_type<T;
 	using array_type = T[N];
-	using base_type = T;
 	using view_type = typename Kokkos::View<array_type,KokkosLayout,MemorySpace>;
 
-	view_type _data;
 
-
-	// Default creation spawns a view
-	explicit ILattice() = default;
-
-	// Custom creation allows passing in a view
-	explicit ILattice(view_type subview_of_parent) : _data(subview_of_parent) {}
-
-	KOKKOS_INLINE_FUNCTION
-	T& elem(Index i) const {
-		return _data(i);
-	}
-
-
+	~ILattice() = default;
+	ILattice(const ILattice& p) = default;
+	ILattice(ILattice&& p) = default;
+	ILattice& operator=(const ILattice& p) = default;
 };
-
 
 template<typename T,
 	typename MemorySpace=Kokkos::DefaultExecutionSpace::memory_space,
 	typename KokkosLayout=Kokkos::DefaultExecutionSpace::array_layout>
 struct RScalar {
-	static constexpr
-	KOKKOS_INLINE_FUNCTION
-	Index num_dims() {
-		// Not introducing an extra dimension of length=1
-		return 1+T::num_dims();
-	}
 
-	static constexpr
-	KOKKOS_INLINE_FUNCTION
-	Index num_elem() {
-		// The num elem in T
-		return 1*T::num_elem();
-	}
-
-	using array_type = typename T::array_type[1];
-	using base_type = typename T::base_type;
+	using array_type = typename T;
+	using base_type = typename base_type<T>::type_t;
 	using view_type = typename Kokkos::View<array_type,KokkosLayout,MemorySpace>;
 
-	T _data;
-
-	explicit RScalar() = default;
-	explicit RScalar(view_type subview_of_parent) :
-					_data(Kokkos::subview(subview_of_parent,0,Kokkos::ALL)) {}
-
-	KOKKOS_INLINE_FUNCTION
-	const T& elem() const {
-		return _data;
+	view_type _data_view;
+	explicit RScalar(view_type in) : _data_view(in) {}
+	T& elem() const {
+		_data_view(0);
 	}
+};
 
-	KOKKOS_INLINE_FUNCTION
-	T& elem() {
-		return _data;
-	}
+template<typename T, typename MemSpace, typename Layout>
+struct base_type< RScalar<T,MemSpace,Layout> > {
+	using type_t = typename base_type<T>::type_t;
+};
+
+template<typename T, typename MemSpace, typename Layout>
+struct num_dims< RScalar<T,MemSpace,Layout> >
+{
+	static constexpr Index value = num_dims<T>::value;
 };
 
 template<typename T,
 	typename MemorySpace=Kokkos::DefaultExecutionSpace::memory_space,
 	typename KokkosLayout=Kokkos::DefaultExecutionSpace::array_layout>
 struct RComplex {
-	static constexpr
-	KOKKOS_INLINE_FUNCTION
-	Index num_dims() {
-		return 1+T::num_dims();
-	}
-
-	static constexpr
-	KOKKOS_INLINE_FUNCTION
-	Index num_elem() {
-		return 2*T::num_elem();
-	}
 
 	using array_type = typename T::array_type[2];
 	using base_type = typename T::base_type;
 	using view_type = typename Kokkos::View<array_type,KokkosLayout,MemorySpace>;
 
-	mutable T _data[2];
-
-	explicit RComplex() = default;
-	explicit RComplex(view_type in) : _data{
-			T(Kokkos::subview(in,0,Kokkos::ALL)),
-			T(Kokkos::subview(in,1,Kokkos::ALL)) } {}
-
-
-	KOKKOS_INLINE_FUNCTION
-	T& real() const { return _data[0]; }
-
-	KOKKOS_INLINE_FUNCTION
-	T& imag() const { return _data[1]; }
-
 };
+#endif
 
 template<typename T, Index N,
 	typename MemorySpace=Kokkos::DefaultExecutionSpace::memory_space,
 	typename KokkosLayout=Kokkos::DefaultExecutionSpace::array_layout>
 struct PVector {
 
-	static constexpr
-	KOKKOS_INLINE_FUNCTION
-	Index num_dims() {
-		return 1+T::num_dims();
-	}
-
-	static constexpr
-	KOKKOS_INLINE_FUNCTION
-	Index num_elem() {
-		return N*T::num_elem();
-	}
-
-	mutable T _data[N];
-
-	using array_type = typename T::array_type[N];
-	using base_type = typename T::base_type;
+	using array_type = T[N];
+	using base_type = typename base_type<T>::type_t;
 	using view_type = typename Kokkos::View<array_type,KokkosLayout,MemorySpace>;
 
-	explicit PVector() = default;
+	view_type _data_view;
 
-	explicit PVector(view_type in) {
-		for(int i=0; i < N; ++i) {
-			// This is ugly. I don't actually know how many sub-levels there are
-			// without counting (ie calling num_dims() on T )
-			//
-			// But I know that there are at most 8 indices in Kokkos
-			// so at most 7 below me
-			//
-			// Fortunately: num_dims() is constexpr so I can use if-constexpr
-			// and only the one that matches will be compiled -- the rest should be ditched.
-			if constexpr( T::num_dims() == 2 ) {
-				_data[i] = T( Kokkos::subview(in,i,Kokkos::ALL, Kokkos::ALL));
-			}
+	explicit PVector(view_type view_in) : _data_view( view_in ) {}
 
-			if constexpr( T::num_dims() == 3 ) {
-				_data[i] = T( Kokkos::subview(in,i,Kokkos::ALL, Kokkos::ALL, Kokkos::ALL));
-			}
+	T& elem(Index i) const {
+		return _data_view(i);
+	}
 
-			if constexpr( T::num_dims() == 4 ) {
-				_data[i] = T( Kokkos::subview(in,i,Kokkos::ALL, Kokkos::ALL, Kokkos::ALL,
-												   Kokkos::ALL));
-			}
+};
 
-			if constexpr( T::num_dims() == 5 ) {
-				_data[i] = T( Kokkos::subview(in,i,Kokkos::ALL, Kokkos::ALL, Kokkos::ALL,
-												   Kokkos::ALL, Kokkos::ALL));
-			}
+template<typename T, Index N, typename MemSpace, typename Layout>
+struct base_type< PVector<T,N,MemSpace,Layout> > {
+	using type_t = typename base_type<T>::type_t;
+};
 
-			if constexpr( T::num_dims() == 6 ) {
-				_data[i] = T( Kokkos::subview(in,i,Kokkos::ALL, Kokkos::ALL, Kokkos::ALL,
-												   Kokkos::ALL, Kokkos::ALL, Kokkos::ALL));
-			}
-			if constexpr( T::num_dims() == 7 ) {
-				_data[i] = T( Kokkos::subview(in,i,Kokkos::ALL, Kokkos::ALL, Kokkos::ALL,
-												   Kokkos::ALL, Kokkos::ALL, Kokkos::ALL,
-												   Kokkos::ALL));
-			}
-		}}
-
-	KOKKOS_INLINE_FUNCTION
-	T& elem(Index i) const { return _data[i]; }
+template<typename T, Index N, typename MemSpace, typename Layout>
+struct num_dims< PVector<T,N,MemSpace,Layout> >
+{
+	static constexpr Index value = 1 + num_dims<T>::value;
 };
 
 template<typename T, Index N,
@@ -202,65 +142,42 @@ template<typename T, Index N,
 	typename KokkosLayout=Kokkos::DefaultExecutionSpace::array_layout>
 struct PMatrix {
 
-	static constexpr
-	KOKKOS_INLINE_FUNCTION
-	Index num_dims() {
-		return 2+T::num_dims();
-	}
 
-	static constexpr
-	KOKKOS_INLINE_FUNCTION
-	Index num_elem() {
-		return N*N*T::num_elem();
-	}
+	using  array_type = typename T::array_type[N][N];
+	using  base_type = typename base_type<T>::type_t;
+	using  view_type = typename Kokkos::View<array_type,KokkosLayout,MemorySpace>;
 
-	mutable T _data[N][N];
+	view_type _data_view;
 
-	using array_type = typename T::array_type[N][N];
-	using base_type = typename T::base_type;
-	using view_type = typename Kokkos::View<array_type,KokkosLayout,MemorySpace>;
+	explicit PMatrix(view_type view_in) : _data_view( view_in ) {}
 
-	explicit PMatrix() = default;
-	explicit PMatrix(view_type in) {
-		for(int j=0; j < N; ++j) {
-		 for(int i=0; i < N; ++i) {
-				// This is ugly. I don't actually know how many sub-levels there are
-			 // without counting (ie calling num_dims() on T )
-			 //
-			 // But I know that there are at most 8 indices in Kokkos
-			 // so at most 6 below me since I have 2 indices
-			 //
-			 // Fortunately: num_dims() is constexpr so I can use if-constexpr
-			 // and only the one that matches will be compiled -- the rest should be ditched.
-			 if constexpr( T::num_dims() == 2 ) {
-				_data[i][j] = T( Kokkos::subview(in,i,j,Kokkos::ALL, Kokkos::ALL));
-			}
-
-			if constexpr( T::num_dims() == 3 ) {
-				_data[i][j] = T( Kokkos::subview(in,i,j,Kokkos::ALL, Kokkos::ALL, Kokkos::ALL));
-			}
-
-			if constexpr( T::num_dims() == 4 ) {
-				_data[i][j] = T( Kokkos::subview(in,i,j,Kokkos::ALL, Kokkos::ALL, Kokkos::ALL,
-												   Kokkos::ALL));
-			}
-
-			if constexpr( T::num_dims() == 5 ) {
-				_data[i][j] = T( Kokkos::subview(in,i,j,Kokkos::ALL, Kokkos::ALL, Kokkos::ALL,
-												   Kokkos::ALL, Kokkos::ALL));
-			}
-
-			if constexpr( T::num_dims() == 6 ) {
-				_data[i][j] = T( Kokkos::subview(in,i,j,Kokkos::ALL, Kokkos::ALL, Kokkos::ALL,
-												   Kokkos::ALL, Kokkos::ALL, Kokkos::ALL));
-			}
-		 }
+	T elem(Index i, Index j) const {
+		if constexpr( num_dims<T>::value == 1 ) {
+			return T( Kokkos::subview(_data_view,i,j,Kokkos::ALL));
+		}
+		if constexpr( num_dims<T>::value == 2 ) {
+			return T( Kokkos::subview(_data_view,i,j,Kokkos::ALL, Kokkos::ALL));
 		}
 	}
 
-	T& elem(Index i, Index j) const { return _data[i][j]; }
 };
 
+template<typename T, Index N, typename MemSpace, typename Layout>
+struct base_type< PMatrix<T,N,MemSpace,Layout> > {
+	using type_t = typename base_type<T>::type_t;
+};
+
+template<typename T, Index N, typename MemSpace, typename Layout>
+struct num_dims< PMatrix<T,N,MemSpace,Layout> >
+{
+	static constexpr Index value = 2 + num_dims<T>::value;
+};
+
+
+
+// Assumption: T itself is a recursive view, of
+// Type PMatrix, PVector, RScalar, or RComplex
+//
 template<typename T,
 	typename MemorySpace=Kokkos::DefaultExecutionSpace::memory_space,
 	typename KokkosLayout=Kokkos::DefaultExecutionSpace::array_layout>
@@ -270,65 +187,41 @@ struct OLattice {
 	using base_type = typename T::base_type;
 	using view_type = typename Kokkos::View<array_type,KokkosLayout,MemorySpace>;
 
-	static constexpr
-	KOKKOS_INLINE_FUNCTION
-	Index num_dims()  {
-		return 1+T::num_dims();
-	}
-
-	KOKKOS_INLINE_FUNCTION
-	Index num_elem() const {
-		return _n_sites*T::num_elem();
-	}
 
 	// Doesn't need to be mutable... (I think internally the data in a View already is)
-	view_type _data;
+	view_type _data_view;
 
-	// Allocate
-	explicit OLattice(const Index n_sites) : _n_sites(n_sites), _data("OLatticeData", n_sites) {}
+	// Allocate:
+	// NB: This constructor will:
+	//   a) Allocate memory for the view
+	//   b) Call default constructor on each element using 'parallel for'
 
-	// Get site
-	T elem(Index i) const {
-		// This is ugly. I don't actually know how many sub-levels there are
-		// without counting (ie calling num_dims() on T )
-		//
-		// But I know that there are at most 8 indices in Kokkos
-		// so at most 7 below me
-		//
-		// Fortunately: num_dims() is constexpr so I can use if-constexpr
-		// and only the one that matches will be compiled -- the rest should be ditched.
-	   if constexpr ( T::num_dims() == 1 ) {
-		   return T( Kokkos::subview(_data,i, Kokkos::ALL ));
-	   }
+	OLattice(const Index n_sites) : _n_sites(n_sites), _data_view("OLatticeData", n_sites) {}
 
-	   if constexpr ( T::num_dims() == 2 ) {
-		   return T( Kokkos::subview(_data,i, Kokkos::ALL, Kokkos::ALL ));
-	   }
+	// Copy
+	OLattice(const OLattice& in) : _n_sites(in._n_sites), _data_view(in._data_view) {}
 
-	   if constexpr ( T::num_dims() == 3 ) {
-		   return T( Kokkos::subview(_data,i, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL ));
-	   }
+	//Move
+	OLattice(OLattice&& in) : _n_sites(in._n_sites), _data_view(std::move(in._data_view)) {}
 
-	   if constexpr ( T::num_dims() == 4 ) {
-	  		   return T( Kokkos::subview(_data,i, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL ));
-	   }
-
-	   if constexpr( T::num_dims() == 5 ) {
-		   return T( Kokkos::subview(_data,i, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL,
-				   	                          Kokkos::ALL));
-	   }
-
-	   if constexpr( T::num_dims() == 6 ) {
-		   return T( Kokkos::subview(_data,i, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL,
-				   	                          Kokkos::ALL, Kokkos::ALL));
-	   }
-	   if constexpr( T::num_dims() == 7 ) {
-		   return T( Kokkos::subview(_data,i, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL, Kokkos::ALL,
-				   	                          Kokkos::ALL, Kokkos::ALL, Kokkos::ALL));
-	   }
+	OLattice& operator=(const OLattice& in) {
+		_n_sites = in._n_sites;
+		_data_view = in._data_view;
 	}
 
+	constexpr
+	KOKKOS_INLINE_FUNCTION
+	T& elem(const Index i) const {
+		if constexpr ( num_dims<T>::value == 1 ) {
+			return T(  Kokkos::subview(_data_view, i, Kokkos::ALL));
+		}
+
+		if constexpr ( num_dims<T>::value == 2 ) {
+			return T(  Kokkos::subview(_data_view, i, Kokkos::ALL, Kokkos::ALL));
+		}
+	}
 };
+
 }
 
 

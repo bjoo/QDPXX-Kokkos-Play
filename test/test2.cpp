@@ -12,7 +12,7 @@
 
 using namespace Playground;
 
-
+#if 0
 TEST(Test2, TestILatType)
 {
 	using ILatType = ILattice<float,8>;
@@ -23,8 +23,10 @@ TEST(Test2, TestILatType)
 	ASSERT_TRUE( base_type_assertion );
 	ASSERT_EQ( ILatType::num_elem(), 8);
 	ASSERT_EQ( ILatType::num_dims(), 1);
-
+	bool is_std_layout = std::is_standard_layout< ILatType >::value;
+	ASSERT_TRUE( is_std_layout );
 }
+
 
 TEST(Test2, TestRScalarILatType)
 {
@@ -35,7 +37,9 @@ TEST(Test2, TestRScalarILatType)
 	bool base_type_assertion = std::is_same_v< ScalarType::base_type, float>;
 
 	ASSERT_EQ( ScalarType::num_elem(), ILatType::num_elem() );
-	ASSERT_EQ( ScalarType::num_dims(), 2 );
+	ASSERT_EQ( ScalarType::num_dims(), ILatType::num_dims());
+
+
 }
 
 
@@ -50,7 +54,9 @@ TEST(Test2, TestRComplexILatType)
 
 	ASSERT_EQ( ComplexType::num_elem(), 2*ILatType::num_elem() );
 	ASSERT_EQ( ComplexType::num_dims(), 2 );
+
 }
+
 
 TEST(Test2, TestPVectorRComplexILatType)
 {
@@ -110,16 +116,16 @@ TEST(Test2, TestOLatticePropILatType)
 	ASSERT_EQ( OLatticeType::num_dims(), 7 );
 
 	// Now I need to check on my view
-	ASSERT_EQ(testlat._data.rank, OLatticeType::num_dims());
+	ASSERT_EQ(testlat._data_view.rank, OLatticeType::num_dims());
 
-	ASSERT_EQ( testlat._data.span(), 20*3*3*4*4*2*8);
-	ASSERT_EQ( testlat._data.extent(0),20);
-	ASSERT_EQ( testlat._data.extent(1),4);
-	ASSERT_EQ( testlat._data.extent(2),4);
-	ASSERT_EQ( testlat._data.extent(3),3);
-	ASSERT_EQ( testlat._data.extent(4),3);
-	ASSERT_EQ( testlat._data.extent(5),2);
-	ASSERT_EQ( testlat._data.extent(6),8);
+	ASSERT_EQ( testlat._data_view.span(), 20*3*3*4*4*2*8);
+	ASSERT_EQ( testlat._data_view.extent(0),20);
+	ASSERT_EQ( testlat._data_view.extent(1),4);
+	ASSERT_EQ( testlat._data_view.extent(2),4);
+	ASSERT_EQ( testlat._data_view.extent(3),3);
+	ASSERT_EQ( testlat._data_view.extent(4),3);
+	ASSERT_EQ( testlat._data_view.extent(5),2);
+	ASSERT_EQ( testlat._data_view.extent(6),8);
 
 }
 
@@ -294,65 +300,33 @@ TEST(Test2, TestPPropComplexILatStorage)
 	}
 }
 
+#endif
 
 TEST(Test2, TestOLatPPropComplexILatStorage)
 {
-	using ILatType = ILattice<float,8>;
-	using RComplexType = RComplex<ILatType>;
-	using PColMatType = PMatrix<RComplexType,3>;
-	using PPropType = PMatrix<PColMatType,4>;
+	using PVecType = PVector<float,3>;
+	using PPropType = PMatrix<PVecType,4>;
 	using OLatType = OLattice<PPropType>;
 
 	OLatType the_prop(20);
+	auto elem_0 = the_prop.elem(0);
 
-	Kokkos::parallel_for(20*8*2*3*3*4*4,[=](const Index i){
-
-		Index lane = i%8;
-		Index compcolcolspinspin = i/8;
-
-		Index comp = compcolcolspinspin % 2;
-		Index colcolspinspin = compcolcolspinspin/2;
-
-		Index col1 = colcolspinspin % 3;
-		Index colspinspin = colcolspinspin / 3;
-
-		Index col2 = colspinspin % 3;
-		Index spinspin = colspinspin / 3;
-
-		Index spin1 = spinspin % 4;
-		Index spin2site = spinspin / 4;
-
-		Index spin2 = spin2site % 4;
-		Index site = spin2site / 4;
-
-
-		comp == 0 ? the_prop.elem(site).elem(spin2,spin1).elem(col2,col1).real().elem(lane) = i
-				: the_prop.elem(site).elem(spin2,spin1).elem(col2,col1).imag().elem(lane) = i;
-
-	});
-
-
-	typename OLatType::view_type::HostMirror b=Kokkos::create_mirror_view(the_prop._data);
-	Kokkos::deep_copy(b,the_prop._data);
-
-
-	for(int site=0; site < 20; ++site) {
-	for(int s2=0; s2 < 4; ++s2) {
-		for(int s1=0; s1 < 4; ++s1) {
-
-			for(int c2=0; c2 < 3; ++c2 ) {
-				for(int c1=0; c1 < 3; ++c1 ) {
-
-					for(int reim=0; reim < 2; ++reim) {
-						for(int lane=0; lane < 8; ++lane) {
-
-							Index i= lane + 8*(reim + 2*(c1 + 3*(c2 + 3*(s1 + 4*(s2+4*site)))));
-
-							ASSERT_FLOAT_EQ( b(site,s2,s1,c2,c1,reim,lane), static_cast<float>(i));
-						}
-					}
-				}
+	for(int i=0; i < 4; ++i) {
+		for(int j=0; j < 4; ++j ) {
+			for(int k=0; k < 3; ++k){
+				elem_0.elem(i,j).elem(k) = static_cast<float>(i + 4*(j+4*k));
 			}
 		}
-	}}
+	}
+
+	for(int i=0; i < 4; ++i) {
+		for(int j=0; j < 4; ++j ) {
+			for(int k=0; k < 4; ++k ) {
+				ASSERT_FLOAT_EQ( the_prop._data_view(0,i,j,k), static_cast<float>(i + 4*(j+4*k)) );
+			}
+		}
+	}
+
+
 }
+
