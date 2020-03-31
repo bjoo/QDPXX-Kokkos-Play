@@ -33,6 +33,32 @@ TEST(Test3, TestRScalar)
 
 }
 
+TEST(Test3, TestRScalarFromLocal)
+{
+	using storage = Kokkos::View<float[3]>;
+	storage a_storage("a");
+	a_storage(0)=1.5;
+
+
+
+	a_storage(1)=2.5;
+	a_storage(2)=3.5;
+
+	std::array<size_t,8> indices{2,0,0,0, 0,0,0,0};
+	RScalar<float,storage,1 > a(a_storage, indices);
+
+	RScalarLocal<float> local(0.5);
+
+	a = local;
+
+	ASSERT_FLOAT_EQ( a_storage(2),0.5);
+
+	a_storage(2) = 0.35;
+	local = a;
+
+	ASSERT_FLOAT_EQ( local.elem(), 0.35);
+}
+
 TEST(Test3, TestRComplex)
 {
 	using storage = typename Kokkos::View<float[2]>;
