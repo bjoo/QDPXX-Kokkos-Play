@@ -10,6 +10,11 @@
 #include "Kokkos_Core.hpp"
 namespace Playground {
 
+// Type Traits for Type->LocalType conversions
+//
+//
+template<typename T>
+struct LocalType;
 
 
 // Scalar Type
@@ -230,6 +235,8 @@ template<typename T >
 struct RComplexLocal {
 	T _data[2];
 
+	RComplexLocal() {}
+
 	KOKKOS_INLINE_FUNCTION
 	RComplexLocal( const T& re, const T& im ) : _data{re,im} {}
 
@@ -276,8 +283,8 @@ template<typename T, typename ViewType, size_t IdxPos, size_t NumDims >
 KOKKOS_INLINE_FUNCTION
 RComplex<T,ViewType,IdxPos,NumDims>&
 RComplex<T,ViewType,IdxPos,NumDims>::operator=(const RComplexLocal<T>& in ) {
-	_data[0] = in.real();
-	_data[1] = in.imag();
+	(*this).real() = in.real();
+	(*this).imag() = in.imag();
 	return (*this);
 
 }
@@ -291,6 +298,7 @@ struct PVector {
 	ViewType _data;
 	std::array<size_t,8> _indices;
 
+	using my_local_type = PVectorLocal<typename LocalType<T>::type, _N>;
 	// View Type cannot be default constructed
 	PVector() = delete;
 
@@ -298,10 +306,14 @@ struct PVector {
 	PVector(ViewType data_in, std::array<size_t,8> indices) : _data(data_in), _indices(indices){};
 
 	// Initialize from a local type
-	PVector(const PVectorLocal<T,_N>& in) ;
+	PVector(const my_local_type & in) ;
 
 	// Op Assign from a local type
-	PVector& operator=(const PVectorLocal<T,_N>& in);
+	PVector& operator=(const my_local_type& in);
+
+
+	// Op Assign from a local type
+	PVector& operator=(my_local_type&& in);
 
 	KOKKOS_INLINE_FUNCTION
 	auto elem(size_t i) const {
@@ -314,8 +326,23 @@ struct PVector {
 
 template<typename T, size_t _N>
 struct PVectorLocal {
-	T _data[_N];
 
+	// Will bottom out at a float or double or some such
+	using local_subtype = typename LocalType<T>::type;
+
+	// An array of those
+	local_subtype _data[_N];
+
+	// Default constructor
+	explicit PVectorLocal() {}
+
+	// size query for loops so I can save passing N around
+	static constexpr
+	KOKKOS_INLINE_FUNCTION
+	size_t size(void) { return _N; }
+
+
+	// Instantiate from a PVector
 	template<typename ViewType, size_t _IdxPos>
 	KOKKOS_INLINE_FUNCTION
 	PVectorLocal(const PVector<T,ViewType,_N,_IdxPos>& in )
@@ -325,44 +352,68 @@ struct PVectorLocal {
 		}
 	}
 
+	// Assign from a PVector
 	template<typename ViewType, size_t _IdxPos>
 	KOKKOS_INLINE_FUNCTION
-	PVector<T,ViewType,_N,_IdxPos> operator=(const PVector<T,ViewType,_N,_IdxPos>& in) {
+	PVectorLocal<T,_N>& operator=(const PVector<T,ViewType,_N,_IdxPos>& in) {
 		for(size_t i=0; i < _N; ++i) {
 			(*this).elem(i) = in.elem(i);
 		}
+		return *this;
 	}
 
+	// Assign from a PVector
+	template<typename ViewType, size_t _IdxPos>
 	KOKKOS_INLINE_FUNCTION
-	const T&  elem(size_t i) const {
+	PVectorLocal<T,_N>& operator=(PVector<T,ViewType,_N,_IdxPos>&& in) {
+		for(size_t i=0; i < _N; ++i) {
+			(*this).elem(i) = in.elem(i);
+		}
+		return *this;
+	}
+
+	// Getters and setters
+	KOKKOS_INLINE_FUNCTION
+	const local_subtype&  elem(size_t i) const {
 		return _data[i];
 	}
 
 	KOKKOS_INLINE_FUNCTION
-	T&  elem(size_t i)  {
+	local_subtype&  elem(size_t i)  {
 		return _data[i];
 	}
 };
 
 
-// Initialize from a local type
+// Initialize from a local type -- this was predeclared now we can write it
 template<typename T, typename ViewType, size_t _N, size_t _IdxPos>
 KOKKOS_INLINE_FUNCTION
-PVector<T,ViewType,_N,_IdxPos>::PVector(const PVectorLocal<T,_N>& in) {
+PVector<T,ViewType,_N,_IdxPos>::PVector(const typename PVector::my_local_type& in) {
 	for(size_t i=0; i < _N; ++i) {
 		(*this).elem(i) = in.elem(i);
 	}
 }
 
+// Assign from a local type
 template<typename T, typename ViewType, size_t _N, size_t _IdxPos>
 KOKKOS_INLINE_FUNCTION
 PVector<T,ViewType,_N,_IdxPos>&
-PVector<T,ViewType,_N,_IdxPos>::operator=(const PVectorLocal<T,_N>& in ){
+PVector<T,ViewType,_N,_IdxPos>::operator=(const PVector::my_local_type& in ){
 	for(size_t i=0; i < _N; ++i) {
 		(*this).elem(i) = in.elem(i);
 	}
 }
 
+
+// Move assign from a local type
+template<typename T, typename ViewType, size_t _N, size_t _IdxPos>
+KOKKOS_INLINE_FUNCTION
+PVector<T,ViewType,_N,_IdxPos>&
+PVector<T,ViewType,_N,_IdxPos>::operator=(PVector::my_local_type&& in ){
+	for(size_t i=0; i < _N; ++i) {
+		(*this).elem(i) = in.elem(i);
+	}
+}
 
 template<typename T, size_t _N>
 struct PMatrixLocal;
@@ -371,15 +422,16 @@ template<typename T, typename ViewType, size_t _N, size_t _IdxPos1, size_t _IdxP
 struct PMatrix {
 	ViewType _data;
 	std::array<size_t,8> _indices;
+	using my_local_type = PMatrixLocal<typename LocalType<T>::type, _N>;
 
 	KOKKOS_INLINE_FUNCTION
 	PMatrix(ViewType data_in, std::array<size_t,8> indices) : _data(data_in), _indices(indices){};
 
 
 	// Forward declare, and define after PMatrixLocal is defined
-	PMatrix(const PMatrixLocal<T,_N>& in);
-	PMatrix& operator=(const PMatrixLocal<T,_N>& in);
-
+	PMatrix(const my_local_type& in);
+	PMatrix& operator=(const my_local_type& in);
+	PMatrix& operator=(my_local_type&& in);
 	KOKKOS_INLINE_FUNCTION
 	auto elem(size_t i, size_t j) const {
 		std::array<size_t,8> new_idx(_indices);
@@ -392,7 +444,15 @@ struct PMatrix {
 
 template<typename T, size_t N>
 struct PMatrixLocal {
-	T _data[N][N];
+	using local_subtype = typename LocalType<T>::type;
+	local_subtype _data[N][N];
+
+	static constexpr
+	KOKKOS_INLINE_FUNCTION
+	size_t size(void) { return N; }
+
+	KOKKOS_INLINE_FUNCTION
+	explicit PMatrixLocal() {}
 
 	template<typename ViewType, size_t _IdxPos1, size_t _IdxPos2>
 	KOKKOS_INLINE_FUNCTION
@@ -415,20 +475,32 @@ struct PMatrixLocal {
 		return (*this);
 	}
 
+	template<typename ViewType, size_t _IdxPos1, size_t _IdxPos2>
 	KOKKOS_INLINE_FUNCTION
-	const T& elem(size_t i, size_t j) const {
+	PMatrixLocal& operator=(PMatrix<T,ViewType,N, _IdxPos1, _IdxPos2>&& in) {
+		for(int j=0; j < N; ++j) {
+			for(int i=0; i < N; ++i) {
+				(*this).elem(i,j) = in.elem(i,j);
+			}
+		}
+		return (*this);
+	}
+
+
+	KOKKOS_INLINE_FUNCTION
+	const local_subtype& elem(size_t i, size_t j) const {
 		return _data[i][j];
 	}
 
 	KOKKOS_INLINE_FUNCTION
-	T& elem(size_t i, size_t j)  {
+	local_subtype& elem(size_t i, size_t j)  {
 		return _data[i][j];
 	}
 };
 
 template<typename T, typename ViewType, size_t _N, size_t _IdxPos1, size_t _IdxPos2>
 KOKKOS_INLINE_FUNCTION
-PMatrix<T,ViewType,_N, _IdxPos1, _IdxPos2>::PMatrix( const PMatrixLocal<T,_N>& in) {
+PMatrix<T,ViewType,_N, _IdxPos1, _IdxPos2>::PMatrix( const PMatrix::my_local_type& in) {
 	for(int j=0; j < _N; ++j) {
 		for(int i=0; i < _N; ++i) {
 			(*this).elem(i,j) = in.elem(i,j);
@@ -440,7 +512,7 @@ PMatrix<T,ViewType,_N, _IdxPos1, _IdxPos2>::PMatrix( const PMatrixLocal<T,_N>& i
 template<typename T, typename ViewType, size_t _N, size_t _IdxPos1, size_t _IdxPos2>
 KOKKOS_INLINE_FUNCTION
 PMatrix<T,ViewType,_N, _IdxPos1, _IdxPos2>&
-PMatrix<T,ViewType,_N, _IdxPos1, _IdxPos2>::operator=( const PMatrixLocal<T,_N>& in) {
+PMatrix<T,ViewType,_N, _IdxPos1, _IdxPos2>::operator=( const PMatrix::my_local_type& in) {
 	for(int j=0; j < _N; ++j) {
 		for(int i=0; i < _N; ++i) {
 			(*this).elem(i,j) = in.elem(i,j);
@@ -449,30 +521,97 @@ PMatrix<T,ViewType,_N, _IdxPos1, _IdxPos2>::operator=( const PMatrixLocal<T,_N>&
 	return (*this);
 }
 
-// Type Traits for Type->LocalType conversions
-//
-//
-template<typename T>
-struct LocalType;
+template<typename T, typename ViewType, size_t _N, size_t _IdxPos1, size_t _IdxPos2>
+KOKKOS_INLINE_FUNCTION
+PMatrix<T,ViewType,_N, _IdxPos1, _IdxPos2>&
+PMatrix<T,ViewType,_N, _IdxPos1, _IdxPos2>::operator=(PMatrix::my_local_type&& in) {
+	for(int j=0; j < _N; ++j) {
+		for(int i=0; i < _N; ++i) {
+			(*this).elem(i,j) = in.elem(i,j);
+		}
+	}
+	return (*this);
+}
 
+// ----- Terminal types
+template<>
+struct LocalType<float> {
+	using type=float;
+};
+
+template<>
+struct LocalType<double> {
+	using type=double;
+};
+
+
+template<>
+struct LocalType<short> {
+	using type=short;
+};
+
+template<>
+struct LocalType<int> {
+	using type=int;
+};
+
+template<>
+struct LocalType<size_t> {
+	using type=size_t;
+};
+
+template<>
+struct LocalType<ptrdiff_t> {
+	using type=ptrdiff_t;
+};
+
+// The local type of a view type is its local type at this level templated
+// on the local type of its substructure.
+// is its local type templated on the terminal type (float etc0)
 template<typename T, typename ViewType, size_t NumDims>
 struct LocalType< RScalar<T, ViewType, NumDims> > {
-	using type =  RScalarLocal<T>;
+	using type =  RScalarLocal<typename LocalType<T>::type>;
 };
 
 template<typename T, typename ViewType, size_t IdxPos, size_t NumDims>
 struct LocalType< RComplex<T, ViewType,IdxPos,NumDims> > {
+	using type = RComplexLocal<typename LocalType<T>::type>;
+};
+
+
+// THe local type for a local type is itself
+template<typename T>
+struct LocalType< RScalarLocal<T> > {
+	using type =  RScalarLocal<T>;
+};
+
+template<typename T>
+struct LocalType< RComplexLocal<T> > {
 	using type = RComplexLocal<T>;
 };
 
-
+// The local type for a view based type is the local type on its level templated
+// on the local types of its subtypes
 template<typename T, typename ViewType, size_t N, size_t IdxPos1>
 struct LocalType< PVector<T, ViewType, N, IdxPos1> > {
+	using type = PVectorLocal<typename LocalType<T>::type,N>;
+};
+
+// The local tpye for a local type is itself
+template<typename T, size_t N>
+struct LocalType< PVectorLocal<T,N> > {
 	using type = PVectorLocal<T,N>;
 };
 
+// The local type for a view based type is its local type templated on its local subtypes
 template<typename T, typename ViewType, size_t N, size_t IdxPos1, size_t IdxPos2>
 struct LocalType< PMatrix<T, ViewType, N, IdxPos1, IdxPos2 > > {
+	using type = PMatrixLocal<typename LocalType<T>::type,N>;
+};
+
+// The local type for a local tpe is itself
+template<typename T, size_t N>
+struct LocalType< PMatrixLocal<T,N> > {
 	using type = PMatrixLocal<T,N>;
 };
 
@@ -561,12 +700,13 @@ template<typename T, typename ViewType, size_t _IdxPos1>
 struct OLattice {
 
 	ViewType _data;
+	std::size_t _n_elem;
+	KOKKOS_INLINE_FUNCTION
+
+	OLattice(size_t n_elem) : _data("internal", n_elem), _n_elem(n_elem) {}
 
 	KOKKOS_INLINE_FUNCTION
-	OLattice(size_t n_elem) : _data("internal", n_elem) {}
-
-	KOKKOS_INLINE_FUNCTION
-	OLattice(ViewType t) : _data(t) {}
+	OLattice(ViewType t) : _data(t), _n_elem(t.extent(0)) {}
 
 	KOKKOS_INLINE_FUNCTION
 	auto elem(size_t i) const {
@@ -575,6 +715,10 @@ struct OLattice {
 		return T(_data, index );
 	}
 
+	KOKKOS_INLINE_FUNCTION
+	size_t num_elem() const {
+		return _n_elem;
+	}
 };
 
 template<typename T, typename ViewType, size_t _IdxPos1>
