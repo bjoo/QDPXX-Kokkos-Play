@@ -13,10 +13,11 @@
 #include <type_traits>
 
 using namespace Playground;
+using TestMemSpace = Kokkos::CudaUVMSpace;
 
 TEST(Test4, OLatticeSpinorAdd)
 {
-	using storage=typename Kokkos::View<float*[4][3][2]>;
+	using storage=typename Kokkos::View<float*[4][3][2],TestMemSpace>;
 	using LatticeFermion = OLattice<
 							PVector<
 								PVector<
@@ -30,7 +31,7 @@ TEST(Test4, OLatticeSpinorAdd)
 	LatticeFermion z(20);
 
 	// Poor man's fill
-	Kokkos::parallel_for(20,[=](const size_t site) {
+	Kokkos::parallel_for(20,KOKKOS_LAMBDA(const size_t site) {
 		for(size_t spin=0; spin < 4; ++spin) {
 			for(size_t color=0; color < 3; ++color) {
 				float r = static_cast<float>(0 + 2*(color + 3*(spin + 4*site)));
@@ -70,7 +71,7 @@ TEST(Test4, OLatticeSpinorAdd)
 TEST(Test4, OLatticePropAdd)
 {
 	// types
-	using storage=typename Kokkos::View<float*[4][4][3][3][2]>;
+	using storage=typename Kokkos::View<float*[4][4][3][3][2],TestMemSpace>;
 	using LatticePropagator = OLattice<
 							PMatrix<
 								PMatrix<
@@ -84,7 +85,7 @@ TEST(Test4, OLatticePropAdd)
 	LatticePropagator z(20);
 
 	// Poor man's fill
-	Kokkos::parallel_for(20,[=](const size_t site) {
+	Kokkos::parallel_for(20,KOKKOS_LAMBDA(const size_t site) {
 		for(size_t spin2=0; spin2 < 4; ++spin2) {
 			for(size_t spin1=0; spin1 < 4; ++spin1) {
 				for(size_t color2=0; color2 < 3; ++color2) {

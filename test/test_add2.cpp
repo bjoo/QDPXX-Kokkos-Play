@@ -14,9 +14,10 @@
 #include <type_traits>
 using namespace Playground;
 
+using TestMemSpace=Kokkos::CudaUVMSpace;
 TEST(ExprTests, CreateRLeaf)
 {
-	using storage_type = typename Kokkos::View<float[1]>;
+	using storage_type = typename Kokkos::View<float[1],TestMemSpace>;
 	storage_type as("a");
 	storage_type bs("b");
 	storage_type cs("c");

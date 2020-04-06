@@ -10,6 +10,8 @@
 #include "Kokkos_Core.hpp"
 namespace Playground {
 
+using KokkosIndices = Kokkos::Array<size_t,8>;
+
 // Type Traits for Type->LocalType conversions
 //
 //
@@ -39,11 +41,11 @@ struct RScalar {
 	ViewType _data;
 
 	// The indices already frozen
-	std::array<size_t,8> _indices;
+	KokkosIndices _indices;
 
     // Construct from a view and fixed indices
 	KOKKOS_INLINE_FUNCTION
-	RScalar(ViewType data_in, std::array<size_t,8> indices) : _data(data_in), _indices(indices){};
+	RScalar(ViewType data_in, KokkosIndices indices) : _data(data_in), _indices(indices){};
 
 	// Construct from a view (assume indices are all 0) -- most for testing purposes
 	KOKKOS_INLINE_FUNCTION
@@ -51,9 +53,11 @@ struct RScalar {
 
 	// Construct from RScalarLocal
 	// Forward declare since RScalarLocal is incomplete
+	KOKKOS_FUNCTION
 	RScalar(const RScalarLocal<T>& t);
 
 	// Op assign from
+	KOKKOS_FUNCTION
 	RScalar& operator=(const RScalarLocal<T>& t );
 
 	// View types cannot be default initialized
@@ -110,6 +114,8 @@ struct RScalarLocal {
 	// The Data
 	T _data;
 
+	KOKKOS_INLINE_FUNCTION
+	RScalarLocal(void) {}
 
 	// Initialize with the data
 	KOKKOS_INLINE_FUNCTION
@@ -142,6 +148,7 @@ struct RScalarLocal {
 };
 
 template<typename T, typename ViewType, size_t N>
+KOKKOS_INLINE_FUNCTION
 RScalar<T,ViewType,N>::RScalar( const RScalarLocal<T>& local_in ) {
 	(*this).elem() = local_in.elem();
 }
@@ -159,36 +166,39 @@ struct RComplexLocal;
 template<typename T, typename ViewType, size_t _IdxPos, size_t _NumDims >
 struct RComplex {
 	ViewType _data;
-	std::array<size_t,8> _indices;
+	KokkosIndices _indices;
 
 	KOKKOS_INLINE_FUNCTION
-	RComplex(ViewType data_in, std::array<size_t,8> indices) : _data(data_in), _indices(indices){};
+	RComplex(ViewType data_in, KokkosIndices indices) : _data(data_in), _indices(indices){};
 
 	// View Types Cannot be Default constructed
 	RComplex() = delete;
 
 	// Forward declare these since RComplexLocal is only
 	// forward declared
+	KOKKOS_FUNCTION
 	RComplex(const RComplexLocal<T>& in);
+
+	KOKKOS_FUNCTION
 	RComplex& operator=(const RComplexLocal<T>& in);
 
 	// Getters and Setters
 	KOKKOS_INLINE_FUNCTION
 	T& real() const {
-		std::array<size_t,8> new_idx(_indices);
+		KokkosIndices new_idx(_indices);
 		new_idx[ _IdxPos ] = 0;
 		return get( new_idx );
 	}
 
 	KOKKOS_INLINE_FUNCTION
 	T& imag() const {
-		std::array<size_t,8> new_idx(_indices);
+		KokkosIndices new_idx(_indices);
 		new_idx[ _IdxPos ] = 1;
 		return get( new_idx );
 	}
 
 	KOKKOS_INLINE_FUNCTION
-	T& get( std::array<size_t,8> new_idx ) const {
+	T& get( KokkosIndices new_idx ) const {
 		if constexpr ( _NumDims == 1 ) {
 			return _data(new_idx[0]);
 		}
@@ -235,6 +245,7 @@ template<typename T >
 struct RComplexLocal {
 	T _data[2];
 
+	KOKKOS_INLINE_FUNCTION
 	RComplexLocal() {}
 
 	KOKKOS_INLINE_FUNCTION
@@ -296,28 +307,31 @@ struct PVectorLocal;
 template<typename T, typename ViewType, size_t _N, size_t _IdxPos >
 struct PVector {
 	ViewType _data;
-	std::array<size_t,8> _indices;
+	KokkosIndices _indices;
 
 	using my_local_type = PVectorLocal<typename LocalType<T>::type, _N>;
 	// View Type cannot be default constructed
 	PVector() = delete;
 
 	KOKKOS_INLINE_FUNCTION
-	PVector(ViewType data_in, std::array<size_t,8> indices) : _data(data_in), _indices(indices){};
+	PVector(ViewType data_in, KokkosIndices indices) : _data(data_in), _indices(indices){};
 
 	// Initialize from a local type
+	KOKKOS_FUNCTION
 	PVector(const my_local_type & in) ;
 
 	// Op Assign from a local type
+	KOKKOS_FUNCTION
 	PVector& operator=(const my_local_type& in);
 
 
 	// Op Assign from a local type
+	KOKKOS_FUNCTION
 	PVector& operator=(my_local_type&& in);
 
 	KOKKOS_INLINE_FUNCTION
 	auto elem(size_t i) const {
-		std::array<size_t,8> new_idx(_indices);
+		KokkosIndices new_idx(_indices);
 		new_idx[_IdxPos] = i;
 		return T(_data, new_idx);
 	}
@@ -334,6 +348,7 @@ struct PVectorLocal {
 	local_subtype _data[_N];
 
 	// Default constructor
+	KOKKOS_INLINE_FUNCTION
 	explicit PVectorLocal() {}
 
 	// size query for loops so I can save passing N around
@@ -402,6 +417,7 @@ PVector<T,ViewType,_N,_IdxPos>::operator=(const PVector::my_local_type& in ){
 	for(size_t i=0; i < _N; ++i) {
 		(*this).elem(i) = in.elem(i);
 	}
+	return (*this);
 }
 
 
@@ -413,6 +429,7 @@ PVector<T,ViewType,_N,_IdxPos>::operator=(PVector::my_local_type&& in ){
 	for(size_t i=0; i < _N; ++i) {
 		(*this).elem(i) = in.elem(i);
 	}
+	return (*this);
 }
 
 template<typename T, size_t _N>
@@ -421,20 +438,27 @@ struct PMatrixLocal;
 template<typename T, typename ViewType, size_t _N, size_t _IdxPos1, size_t _IdxPos2 >
 struct PMatrix {
 	ViewType _data;
-	std::array<size_t,8> _indices;
+	KokkosIndices _indices;
 	using my_local_type = PMatrixLocal<typename LocalType<T>::type, _N>;
 
 	KOKKOS_INLINE_FUNCTION
-	PMatrix(ViewType data_in, std::array<size_t,8> indices) : _data(data_in), _indices(indices){};
+	PMatrix(ViewType data_in, KokkosIndices indices) : _data(data_in), _indices(indices){};
 
+	PMatrix() = delete;
 
 	// Forward declare, and define after PMatrixLocal is defined
+	KOKKOS_FUNCTION
 	PMatrix(const my_local_type& in);
+
+	KOKKOS_FUNCTION
 	PMatrix& operator=(const my_local_type& in);
+
+	KOKKOS_FUNCTION
 	PMatrix& operator=(my_local_type&& in);
+
 	KOKKOS_INLINE_FUNCTION
 	auto elem(size_t i, size_t j) const {
-		std::array<size_t,8> new_idx(_indices);
+		KokkosIndices new_idx(_indices);
 		new_idx[_IdxPos1] = i;
 		new_idx[_IdxPos2] = j;
 		return T(_data, new_idx);
@@ -710,7 +734,7 @@ struct OLattice {
 
 	KOKKOS_INLINE_FUNCTION
 	auto elem(size_t i) const {
-		std::array<size_t,8> index{0,0,0,0, 0,0,0,0};
+		KokkosIndices index{0,0,0,0, 0,0,0,0};
 		index[_IdxPos1 ] = i;
 		return T(_data, index );
 	}

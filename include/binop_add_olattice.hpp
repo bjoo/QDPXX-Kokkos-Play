@@ -17,6 +17,7 @@ namespace Playground {
 template<typename OpKind>
 struct OLatExpr {
 	// Shorthand to do the static cast
+	KOKKOS_INLINE_FUNCTION
 	OpKind const& self() const {
 		return static_cast<const OpKind &>(*this);
 	}
@@ -32,6 +33,7 @@ struct OLatExpr {
 template<typename T>
 class OLeaf : public OLatExpr<OLeaf<T>> {
 public:
+	KOKKOS_INLINE_FUNCTION
 	explicit OLeaf(const T& value) : _value(value){}
 	using dst_type = T;
 
@@ -54,6 +56,7 @@ struct OLatBinOp : OLatExpr< OLatBinOp<OpType,LeftType,RightType>> {
 
 
 	// Execut BinOp for a site
+	KOKKOS_INLINE_FUNCTION
 	auto operator()(const std::size_t site) const {
 		return _op( _left(site), _right(site) );
 	}
@@ -296,7 +299,7 @@ template<typename T, typename V, size_t IdxPos, typename Expr>
 void evaluate(OLattice<T,V,IdxPos>& dest, const Expr& expression ) {
 
 	const std::size_t n_sites= dest.num_elem();
-	Kokkos::parallel_for(n_sites,[=](const size_t site) {
+	Kokkos::parallel_for(n_sites,KOKKOS_LAMBDA(const size_t site) {
 		dest.elem(site) = expression(site);
 	});
 }
