@@ -18,15 +18,16 @@ TEST(Test3, TestRScalar)
 {
 	using storage = Kokkos::View<float[3],TestMemSpace>;
 	storage a_storage("a");
-
-
+	
 	a_storage(0)=1.5;
 	a_storage(1)=2.5;
 	a_storage(2)=3.5;
+	
 
 	KokkosIndices indices{2,0,0,0, 0,0,0,0};
 	RScalar<float,storage,1 > a(a_storage, indices);
 
+	// Needs to be done on device
 	ASSERT_FLOAT_EQ( a.elem(), a_storage(2));
 	a.elem() = 3.2;
 	ASSERT_FLOAT_EQ( a_storage(2), 3.2);
