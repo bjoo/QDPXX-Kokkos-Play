@@ -47,6 +47,7 @@ TEST(Test4, OLatticeSpinorAdd)
 			}
 		}
 	});
+	Kokkos::fence();
 
 	// Some expression
 	evaluate( z, x + (x + y) );
@@ -106,6 +107,7 @@ TEST(Test4, OLatticePropAdd)
 			}
 		}
 	});
+	Kokkos::fence();
 
 	// The evaluate
 	evaluate(z, (x + y) + y);

@@ -196,16 +196,22 @@ TEST(Test3, TestLatPropProp)
 				for(int col2=0; col2 < 3; ++col2) {
 					for(int col1=0; col1 < 3; ++col1) {
 						for(int reim=0; reim < 2; ++reim ) {
-							prop_storage(site,spin2,spin1,col2,col1,reim) =
-									static_cast<float>(reim + 2*(col1 + 3*(col2 + 3*(spin1 + 4*(spin2+4*site)))));
+						  float i =  static_cast<float>(reim + 2*(col1 + 3*(col2\
+												    + 3*(spin1 + 4*(spin2+4*site)))));
+						  prop_storage(site,spin2,spin1,col2,col1,reim) = i;
+							  
 
-							ref_storage(site,spin2,spin1,col2,col1,reim) = 0.5*prop_storage(site,spin2,spin1,col2,col1,reim)+2.6;
+						  //						  ref_storage(site,spin2,spin1,col2,col1,reim) = 0.5*prop_storage(site,spin2,spin1,col2,col1,reim)+2.6;
+						  ref_storage(site,\
+							      spin2,spin1,col2,col1,reim) = 0.5*i + 2.6;
 						}
 					}
 				}
 			}
 		}
 	});
+
+	//	Kokkos::fence();
 
 	using PropType =  OLattice<
 						PMatrix<
@@ -223,6 +229,7 @@ TEST(Test3, TestLatPropProp)
 			for(int spin1=0; spin1 < 4; ++spin1 ) {
 				for(int col2=0; col2 < 3; ++col2) {
 					for(int col1=0; col1 < 3; ++col1) {
+
 						 p.elem(site).elem(spin2,spin1).elem(col2,col1).real() *= 0.5;
 						 p.elem(site).elem(spin2,spin1).elem(col2,col1).real() += 2.6;
 
@@ -230,11 +237,13 @@ TEST(Test3, TestLatPropProp)
 						 p.elem(site).elem(spin2,spin1).elem(col2,col1).imag() += 2.6;
 
 					}
+
 				}
 			}
 		}
 	});
 
+	Kokkos::fence(); // Fence is necessary
 
 	// Checking is off device
 	for(int site=0; site < 20; ++site) {

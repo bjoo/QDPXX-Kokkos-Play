@@ -302,6 +302,7 @@ void evaluate(OLattice<T,V,IdxPos>& dest, const Expr& expression ) {
 	Kokkos::parallel_for(n_sites,KOKKOS_LAMBDA(const size_t site) {
 		dest.elem(site) = expression(site);
 	});
+	Kokkos::fence(); // Apparently this is needed for consistency in UVM space
 }
 
 
