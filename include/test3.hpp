@@ -18,6 +18,87 @@ using KokkosIndices = Kokkos::Array<size_t,8>;
 template<typename T>
 struct LocalType;
 
+#if 0
+#define IF_CONSTEXPR    if constexpr
+#else
+#define IF_CONSTEXPR    if
+#endif
+
+  template<typename ViewType, size_t N>
+  struct Indexer;
+
+  template<typename ViewType>
+  struct Indexer<ViewType,1> {
+    
+    KOKKOS_INLINE_FUNCTION
+    auto& operator()( const ViewType& v, const KokkosIndices& _indices ) const  {
+      return v(_indices[0]);
+    }
+  };
+
+  template<typename ViewType>
+  struct Indexer<ViewType,2> {
+   
+    KOKKOS_INLINE_FUNCTION 
+    auto& operator()( const ViewType& v, const KokkosIndices& _indices) const {
+          return v( _indices[0], _indices[1] );
+    }
+  };
+
+  template<typename ViewType>
+  struct Indexer<ViewType,3> {
+    KOKKOS_INLINE_FUNCTION 
+    auto& operator()( const ViewType& v, const KokkosIndices& _indices ) const {
+      return v( _indices[0], _indices[1], _indices[2] );
+    }
+  };
+
+  template<typename ViewType>
+  struct Indexer<ViewType,4> {
+    KOKKOS_INLINE_FUNCTION
+    auto& operator()( const ViewType& v, const KokkosIndices& _indices ) const {
+    return v( _indices[0], _indices[1], _indices[2], _indices[3] );
+    }
+  };
+
+  template<typename ViewType>
+  struct Indexer<ViewType,5> {
+    KOKKOS_INLINE_FUNCTION
+    auto& operator()( const ViewType& v, const KokkosIndices& _indices ) const {
+    return v( _indices[0], _indices[1], _indices[2], _indices[3],
+		  _indices[4]);
+
+    }
+  };
+
+  template<typename ViewType>
+  struct Indexer<ViewType,6> {
+    KOKKOS_INLINE_FUNCTION
+    auto& operator()( const ViewType& v, const KokkosIndices& _indices ) const {
+      return v( _indices[0], _indices[1], _indices[2], _indices[3],
+		  _indices[4], _indices[5]);
+    }
+  };
+
+  template<typename ViewType>
+  struct Indexer<ViewType,7> {
+    KOKKOS_INLINE_FUNCTION
+    auto& operator()( const ViewType& v,  const KokkosIndices& _indices) const {
+    return v( _indices[0], _indices[1], _indices[2], _indices[3],
+		  _indices[4], _indices[5], _indices[6]);
+    }
+  };
+
+  template<typename ViewType>
+  struct Indexer<ViewType,8> {
+    KOKKOS_INLINE_FUNCTION
+    auto& operator()( const ViewType& v, const KokkosIndices& _indices)  const {
+    return v( _indices[0], _indices[1], _indices[2], _indices[3],
+		  _indices[4], _indices[5], _indices[6], _indices[7]);
+    }
+  };
+  
+
 
 // Scalar Type
 //
@@ -37,71 +118,38 @@ struct RScalarLocal;
 template<typename T, typename ViewType, size_t _NumDims=1>
 struct RScalar {
 
-	// This is a view which should be ok on device
-	ViewType _data;
+  // This is a view which should be ok on device
+  ViewType _data;
 
-	// The indices already frozen
-	KokkosIndices _indices;
+  // The indices already frozen
+  KokkosIndices _indices;
 
-    // Construct from a view and fixed indices
-	KOKKOS_INLINE_FUNCTION
-	RScalar(ViewType data_in, KokkosIndices indices) : _data(data_in), _indices(indices){};
+  Indexer<ViewType, _NumDims> _idx;
+  
+  // Construct from a view and fixed indices
+  KOKKOS_INLINE_FUNCTION
+  RScalar(ViewType data_in, KokkosIndices indices) : _data(data_in), _indices(indices), _idx() {};
+  
+  // Construct from a view (assume indices are all 0) -- most for testing purposes
+  KOKKOS_INLINE_FUNCTION
+  RScalar(ViewType data_in) : _data(data_in), _indices{0,0,0,0,0,0,0,0}, _idx(){}
+  
+  // Construct from RScalarLocal
+  // Forward declare since RScalarLocal is incomplete
+  KOKKOS_FUNCTION
+  RScalar(const RScalarLocal<T>& t);
 
-	// Construct from a view (assume indices are all 0) -- most for testing purposes
-	KOKKOS_INLINE_FUNCTION
-	RScalar(ViewType data_in) : _data(data_in), _indices{0,0,0,0,0,0,0,0}{}
+  // Op assign from
+  KOKKOS_FUNCTION
+  RScalar& operator=(const RScalarLocal<T>& t );
 
-	// Construct from RScalarLocal
-	// Forward declare since RScalarLocal is incomplete
-	KOKKOS_FUNCTION
-	RScalar(const RScalarLocal<T>& t);
+  // View types cannot be default initialized
+  RScalar() = delete;
 
-	// Op assign from
-	KOKKOS_FUNCTION
-	RScalar& operator=(const RScalarLocal<T>& t );
-
-	// View types cannot be default initialized
-	RScalar() = delete;
-
-	KOKKOS_INLINE_FUNCTION
-	T& elem() const {
-		if constexpr ( _NumDims == 1 ) {
-			return _data(_indices[0]);
-		}
-
-		if constexpr ( _NumDims == 2 ) {
-			return _data( _indices[0], _indices[1] );
-		}
-
-		if constexpr ( _NumDims == 3) {
-			return _data( _indices[0], _indices[1], _indices[2] );
-		}
-
-		if constexpr ( _NumDims == 4 ) {
-			return _data( _indices[0], _indices[1], _indices[2], _indices[3] );
-		}
-
-		if constexpr ( _NumDims == 5 ) {
-			return _data( _indices[0], _indices[1], _indices[2], _indices[3],
-					      _indices[4]);
-		}
-
-		if constexpr ( _NumDims == 6 ) {
-			return _data( _indices[0], _indices[1], _indices[2], _indices[3],
-					      _indices[4], _indices[5]);
-		}
-
-		if constexpr ( _NumDims == 7 ) {
-			return _data( _indices[0], _indices[1], _indices[2], _indices[3],
-					      _indices[4], _indices[5], _indices[6]);
-		}
-
-		if constexpr ( _NumDims == 8 ) {
-			return _data( _indices[0], _indices[1], _indices[2], _indices[3],
-					      _indices[4], _indices[5], _indices[6], _indices[7]);
-		}
-
-	}
+  KOKKOS_INLINE_FUNCTION
+  T& elem() const {
+    return _idx(_data,_indices);
+  }
 
 };
 
@@ -167,9 +215,9 @@ template<typename T, typename ViewType, size_t _IdxPos, size_t _NumDims >
 struct RComplex {
 	ViewType _data;
 	KokkosIndices _indices;
-
+  Indexer<ViewType, _NumDims> _idx;
 	KOKKOS_INLINE_FUNCTION
-	RComplex(ViewType data_in, KokkosIndices indices) : _data(data_in), _indices(indices){};
+	RComplex(ViewType data_in, KokkosIndices indices) : _data(data_in), _indices(indices), _idx() {};
 
 	// View Types Cannot be Default constructed
 	RComplex() = delete;
@@ -187,56 +235,15 @@ struct RComplex {
 	T& real() const {
 		KokkosIndices new_idx(_indices);
 		new_idx[ _IdxPos ] = 0;
-		return get( new_idx );
+		return _idx(_data, new_idx );
 	}
 
 	KOKKOS_INLINE_FUNCTION
 	T& imag() const {
 		KokkosIndices new_idx(_indices);
 		new_idx[ _IdxPos ] = 1;
-		return get( new_idx );
+		return _idx(_data, new_idx );
 	}
-
-	KOKKOS_INLINE_FUNCTION
-	T& get( KokkosIndices new_idx ) const {
-		if constexpr ( _NumDims == 1 ) {
-			return _data(new_idx[0]);
-		}
-
-		if constexpr ( _NumDims == 2 ) {
-			return _data(new_idx[0],new_idx[1]);
-		}
-
-		if constexpr ( _NumDims == 3) {
-			return _data( new_idx[0], new_idx[1], new_idx[2] );
-		}
-
-		if constexpr ( _NumDims == 4 ) {
-			return _data( new_idx[0], new_idx[1], new_idx[2], new_idx[3] );
-		}
-
-		if constexpr ( _NumDims == 5 ) {
-			return _data( new_idx[0], new_idx[1], new_idx[2], new_idx[3],
-					new_idx[4]);
-		}
-
-		if constexpr ( _NumDims == 6 ) {
-			return _data( new_idx[0], new_idx[1], new_idx[2], new_idx[3],
-					new_idx[4], new_idx[5]);
-		}
-
-		if constexpr ( _NumDims == 7 ) {
-			return _data( new_idx[0], new_idx[1], new_idx[2], new_idx[3],
-					new_idx[4], new_idx[5], new_idx[6]);
-		}
-
-		if constexpr ( _NumDims == 8 ) {
-			return _data( new_idx[0], new_idx[1], new_idx[2], new_idx[3],
-					new_idx[4], new_idx[5], new_idx[6], new_idx[7]);
-		}
-
-	}
-
 
 };
 
@@ -725,11 +732,10 @@ struct OLattice {
 
 	ViewType _data;
 	std::size_t _n_elem;
-	KOKKOS_INLINE_FUNCTION
 
 	OLattice(size_t n_elem) : _data("internal", n_elem), _n_elem(n_elem) {}
 
-	KOKKOS_INLINE_FUNCTION
+
 	OLattice(ViewType t) : _data(t), _n_elem(t.extent(0)) {}
 
 	KOKKOS_INLINE_FUNCTION

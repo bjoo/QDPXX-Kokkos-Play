@@ -185,13 +185,70 @@ TEST(Test3, TestSiteProp)
 }
 
 
+template<typename storage>
+struct TestFunctor
+{
+  storage prop_storage;
+  storage ref_storage;
+
+  void func()  {
+    Kokkos::parallel_for( 20, KOKKOS_LAMBDA(const int site){
+	for(int spin2=0; spin2 < 4; ++spin2) {
+	  for(int spin1=0; spin1 < 4; ++spin1 ) {
+	    for(int col2=0; col2 < 3; ++col2) {
+	      for(int col1=0; col1 < 3; ++col1) {
+		for(int reim=0; reim < 2; ++reim ) {
+		  float i =  static_cast<float>(reim + 2*(col1 + 3*(col2 \
+								    + 3*(spin1 + 4* \
+									 (spin2+4*site)))));
+		  prop_storage(site,spin2,spin1,col2,col1,reim) = i;
+		  
+		  
+		  ref_storage(site,spin2,spin1,col2,col1,reim) = 0.5*i + 2.6;
+		}
+	      }
+	    }
+	  }
+	}
+      });
+  }
+};
+
+  template<typename T>
+  struct TestFunctor2 {
+    T p;
+
+    void func() {
+
+      Kokkos::parallel_for(20, KOKKOS_LAMBDA(const int site) {
+	  for(int spin2=0; spin2 < 4; ++spin2) {
+	    for(int spin1=0; spin1 < 4; ++spin1 ) {
+	      for(int col2=0; col2 < 3; ++col2) {
+		for(int col1=0; col1 < 3; ++col1) {
+		  
+		  p.elem(site).elem(spin2,spin1).elem(col2,col1).real() *= 0.5;
+		  p.elem(site).elem(spin2,spin1).elem(col2,col1).real() += 2.6;
+		  
+		  p.elem(site).elem(spin2,spin1).elem(col2,col1).imag() *= 0.5;
+		  p.elem(site).elem(spin2,spin1).elem(col2,col1).imag() += 2.6;
+		  
+		}
+		
+	      }
+	    }
+	  }
+	});
+    }
+  };
+
 TEST(Test3, TestLatPropProp)
 {
 	using storage =typename Kokkos::View<float*[4][4][3][3][2],TestMemSpace>;
 	storage prop_storage("p", 20); // 20 sites
 	storage ref_storage("p_ref", 20);
 
-	Kokkos::parallel_for( 20, KOKKOS_LAMBDA(int site) {
+#if 0
+ 	Kokkos::parallel_for( 20, KOKKOS_LAMBDA(const int site){
 		for(int spin2=0; spin2 < 4; ++spin2) {
 			for(int spin1=0; spin1 < 4; ++spin1 ) {
 				for(int col2=0; col2 < 3; ++col2) {
@@ -211,7 +268,10 @@ TEST(Test3, TestLatPropProp)
 			}
 		}
 	});
-
+#else 
+	TestFunctor<storage> t{prop_storage,ref_storage};
+	t.func();
+#endif
 	//	Kokkos::fence();
 
 	using PropType =  OLattice<
@@ -224,8 +284,8 @@ TEST(Test3, TestLatPropProp)
 
 	PropType p(prop_storage);
 
-
-	Kokkos::parallel_for(20, KOKKOS_LAMBDA(const int site){
+#if 0
+	Kokkos::parallel_for(20, KOKKOS_LAMBDA(const int site) {
 		for(int spin2=0; spin2 < 4; ++spin2) {
 			for(int spin1=0; spin1 < 4; ++spin1 ) {
 				for(int col2=0; col2 < 3; ++col2) {
@@ -243,7 +303,10 @@ TEST(Test3, TestLatPropProp)
 			}
 		}
 	});
-
+#else
+	TestFunctor2<PropType> pfunct{ p };
+	pfunct.func();
+#endif
 	Kokkos::fence(); // Fence is necessary
 
 	// Checking is off device
