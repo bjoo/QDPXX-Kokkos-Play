@@ -15,6 +15,35 @@
 using namespace Playground;
 using TestMemSpace = Kokkos::CudaSpace;
 
+template<typename T>
+struct FillFunctor {
+	T x,y,z;
+	void func() {
+	      // Poor man's fill
+        Kokkos::parallel_for(20,KOKKOS_LAMBDA(const size_t site) {
+                for(size_t spin=0; spin < 4; ++spin) {
+                        for(size_t color=0; color < 3; ++color) {
+                                float r = static_cast<float>(0 + 2*(color + 3*(spin + 4*site)));
+                                float i = static_cast<float>(1 + 2*(color + 3*(spin + 4*site)));
+                                x.elem(site).elem(spin).elem(color).real() =r;
+                                x.elem(site).elem(spin).elem(color).imag() = i;
+
+                                y.elem(site).elem(spin).elem(color).real() = 2.0f*r;
+                                y.elem(site).elem(spin).elem(color).imag() = 2.0f*i;
+
+                                z.elem(site).elem(spin).elem(color).real() = 0.0f;
+                                z.elem(site).elem(spin).elem(color).imag() = 0.0f;
+                        }
+                }
+        });
+        Kokkos::fence();
+
+
+
+	}
+};
+
+
 TEST(Test4, OLatticeSpinorAdd)
 {
 	using storage=typename Kokkos::View<float*[4][3][2],TestMemSpace>;
@@ -30,6 +59,7 @@ TEST(Test4, OLatticeSpinorAdd)
 	LatticeFermion y(20);
 	LatticeFermion z(20);
 
+#if 0
 	// Poor man's fill
 	Kokkos::parallel_for(20,KOKKOS_LAMBDA(const size_t site) {
 		for(size_t spin=0; spin < 4; ++spin) {
@@ -48,7 +78,10 @@ TEST(Test4, OLatticeSpinorAdd)
 		}
 	});
 	Kokkos::fence();
-
+#else
+	FillFunctor<LatticeFermion> f{x,y,z};
+	f.func();
+#endif
 	// Some expression
 	evaluate( z, x + (x + y) );
 
@@ -73,6 +106,39 @@ TEST(Test4, OLatticeSpinorAdd)
 
 }
 
+template<typename T> 
+struct FillFunc2 {
+	T x,y,z;
+	void func(void) {
+     // Poor man's fill: on-device
+        Kokkos::parallel_for(20,KOKKOS_LAMBDA(const size_t site) {
+                for(size_t spin2=0; spin2 < 4; ++spin2) {
+                        for(size_t spin1=0; spin1 < 4; ++spin1) {
+                                for(size_t color2=0; color2 < 3; ++color2) {
+                                        for(size_t color1=0;color1 < 3; ++color1) {
+
+                                                float r = static_cast<float>(0 + 2*(color1 + 3*(color2 + 3*(spin1 + 4*(spin2 + 4*site)))));
+                                                float i = static_cast<float>(1 + 2*(color1 + 3*(color2 + 3*(spin1 + 4*(spin2 + 4*site)))));
+                                                x.elem(site).elem(spin2,spin1).elem(color2,color1).real() =r;
+                                                x.elem(site).elem(spin2,spin1).elem(color2,color1).imag() = i;
+
+                                                y.elem(site).elem(spin2,spin1).elem(color2,color1).real() = 2.0f*r;
+                                                y.elem(site).elem(spin2,spin1).elem(color2,color1).imag() = 2.0f*i;
+
+                                                z.elem(site).elem(spin2,spin1).elem(color2,color1).real() = 0.0f;
+                                                z.elem(site).elem(spin2,spin1).elem(color2,color1).imag() = 0.0f;
+                                        }
+                                }
+                        }
+                }
+        });
+        Kokkos::fence();
+
+
+
+	}
+
+};
 // Test PMatrix
 TEST(Test4, OLatticePropAdd)
 {
@@ -90,6 +156,7 @@ TEST(Test4, OLatticePropAdd)
 	LatticePropagator y(20);
 	LatticePropagator z(20);
 
+#if 0
 	// Poor man's fill: on-device
 	Kokkos::parallel_for(20,KOKKOS_LAMBDA(const size_t site) {
 		for(size_t spin2=0; spin2 < 4; ++spin2) {
@@ -113,6 +180,10 @@ TEST(Test4, OLatticePropAdd)
 		}
 	});
 	Kokkos::fence();
+#else
+	FillFunc2<LatticePropagator> f{x,y,z};
+	f.func();
+#endif
 
 	// The evaluate
 	evaluate(z, (x + y) + y);

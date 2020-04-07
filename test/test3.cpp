@@ -185,13 +185,42 @@ TEST(Test3, TestSiteProp)
 }
 
 
+template<typename T>
+struct Functor {
+	T& p;
+	void func() {
+		       Kokkos::parallel_for(20, KOKKOS_LAMBDA(const int site){
+                for(int spin2=0; spin2 < 4; ++spin2) {
+                        for(int spin1=0; spin1 < 4; ++spin1 ) {
+                                for(int col2=0; col2 < 3; ++col2) {
+                                        for(int col1=0; col1 < 3; ++col1) {
+
+                                                 p.elem(site).elem(spin2,spin1).elem(col2,col1).real() *= 0.5;
+                                                 p.elem(site).elem(spin2,spin1).elem(col2,col1).real() += 2.6;
+
+                                                 p.elem(site).elem(spin2,spin1).elem(col2,col1).imag() *= 0.5;
+                                                 p.elem(site).elem(spin2,spin1).elem(col2,col1).imag() += 2.6;
+
+                                        }
+
+                                }
+                        }
+                }
+        });
+
+        Kokkos::fence(); // Fence is necessary
+
+
+	}
+};
+
 TEST(Test3, TestLatPropProp)
 {
 	using storage =typename Kokkos::View<float*[4][4][3][3][2],TestMemSpace>;
 	storage prop_storage("p", 20); // 20 sites
 	storage ref_storage("p_ref", 20);
 
-	Kokkos::parallel_for( 20, KOKKOS_LAMBDA(int site) {
+	for(int site=0; site < 20; ++site) {
 		for(int spin2=0; spin2 < 4; ++spin2) {
 			for(int spin1=0; spin1 < 4; ++spin1 ) {
 				for(int col2=0; col2 < 3; ++col2) {
@@ -210,7 +239,7 @@ TEST(Test3, TestLatPropProp)
 				}
 			}
 		}
-	});
+	}
 
 	//	Kokkos::fence();
 
@@ -224,7 +253,7 @@ TEST(Test3, TestLatPropProp)
 
 	PropType p(prop_storage);
 
-
+#if 0
 	Kokkos::parallel_for(20, KOKKOS_LAMBDA(const int site){
 		for(int spin2=0; spin2 < 4; ++spin2) {
 			for(int spin1=0; spin1 < 4; ++spin1 ) {
@@ -245,6 +274,10 @@ TEST(Test3, TestLatPropProp)
 	});
 
 	Kokkos::fence(); // Fence is necessary
+#else
+	Functor<PropType> f{p};
+	f.func();
+#endif
 
 	// Checking is off device
 	for(int site=0; site < 20; ++site) {
