@@ -13,10 +13,11 @@
 #include <type_traits>
 
 using namespace Playground;
+using TestMemSpace = Kokkos::CudaSpace;
 
 TEST(Test4, OLatticeSpinorAdd)
 {
-	using storage=typename Kokkos::View<float*[4][3][2]>;
+	using storage=typename Kokkos::View<float*[4][3][2],TestMemSpace>;
 	using LatticeFermion = OLattice<
 							PVector<
 								PVector<
@@ -30,7 +31,7 @@ TEST(Test4, OLatticeSpinorAdd)
 	LatticeFermion z(20);
 
 	// Poor man's fill
-	Kokkos::parallel_for(20,[=](const size_t site) {
+	Kokkos::parallel_for(20,KOKKOS_LAMBDA(const size_t site) {
 		for(size_t spin=0; spin < 4; ++spin) {
 			for(size_t color=0; color < 3; ++color) {
 				float r = static_cast<float>(0 + 2*(color + 3*(spin + 4*site)));
@@ -46,21 +47,27 @@ TEST(Test4, OLatticeSpinorAdd)
 			}
 		}
 	});
+	Kokkos::fence();
 
 	// Some expression
 	evaluate( z, x + (x + y) );
 
-	// Check
-	for(int site = 0; site < 20; ++site) {
-		for(size_t spin=0; spin < 4; ++spin) {
-			for(size_t color=0; color < 3; ++color) {
-				float r = static_cast<float>(0 + 2*(color + 3*(spin + 4*site)));
-				float i = static_cast<float>(1 + 2*(color + 3*(spin + 4*site)));
-				ASSERT_FLOAT_EQ( z.elem(site).elem(spin).elem(color).real(), 4.0f*r);
-				ASSERT_FLOAT_EQ( z.elem(site).elem(spin).elem(color).imag(), 4.0f*i);
-			}
-		}
+	{
+	  auto z_mirror = Kokkos::create_mirror(z._data);
+	  Kokkos::deep_copy(z_mirror, z._data);
 
+	  // Check -- always on host
+	  for(int site = 0; site < 20; ++site) {
+	    for(size_t spin=0; spin < 4; ++spin) {
+	      for(size_t color=0; color < 3; ++color) {
+		float r = static_cast<float>(0 + 2*(color + 3*(spin + 4*site)));
+		float i = static_cast<float>(1 + 2*(color + 3*(spin + 4*site)));
+		ASSERT_FLOAT_EQ( z_mirror(site,spin,color,0), 4.0f*r);
+		ASSERT_FLOAT_EQ( z_mirror(site,spin,color,1), 4.0f*i);
+	      }
+	    }
+       
+	  }
 	}
 
 
@@ -70,7 +77,7 @@ TEST(Test4, OLatticeSpinorAdd)
 TEST(Test4, OLatticePropAdd)
 {
 	// types
-	using storage=typename Kokkos::View<float*[4][4][3][3][2]>;
+	using storage=typename Kokkos::View<float*[4][4][3][3][2],TestMemSpace>;
 	using LatticePropagator = OLattice<
 							PMatrix<
 								PMatrix<
@@ -83,8 +90,8 @@ TEST(Test4, OLatticePropAdd)
 	LatticePropagator y(20);
 	LatticePropagator z(20);
 
-	// Poor man's fill
-	Kokkos::parallel_for(20,[=](const size_t site) {
+	// Poor man's fill: on-device
+	Kokkos::parallel_for(20,KOKKOS_LAMBDA(const size_t site) {
 		for(size_t spin2=0; spin2 < 4; ++spin2) {
 			for(size_t spin1=0; spin1 < 4; ++spin1) {
 				for(size_t color2=0; color2 < 3; ++color2) {
@@ -105,25 +112,31 @@ TEST(Test4, OLatticePropAdd)
 			}
 		}
 	});
+	Kokkos::fence();
 
 	// The evaluate
 	evaluate(z, (x + y) + y);
 
-	// Check
-	for(size_t site=0; site < 20; ++site) {
-		for(size_t spin2=0; spin2 < 4; ++spin2) {
-			for(size_t spin1=0; spin1 < 4; ++spin1) {
-				for(size_t color2=0; color2 < 3; ++color2) {
-					for(size_t color1=0;color1 < 3; ++color1) {
+	{
+	  // Check -- always on the host
+	  auto z_mirror = Kokkos::create_mirror(z._data);
+	  Kokkos::deep_copy(z_mirror, z._data);
 
-						float r = static_cast<float>(0 + 2*(color1 + 3*(color2 + 3*(spin1 + 4*(spin2 + 4*site)))));
-						float i = static_cast<float>(1 + 2*(color1 + 3*(color2 + 3*(spin1 + 4*(spin2 + 4*site)))));
-						ASSERT_FLOAT_EQ( z.elem(site).elem(spin2,spin1).elem(color2,color1).real(), 5.0f*r);
-						ASSERT_FLOAT_EQ( z.elem(site).elem(spin2,spin1).elem(color2,color1).imag(), 5.0f*i);
-					}
-				}
-			}
+	  for(size_t site=0; site < 20; ++site) {
+	    for(size_t spin2=0; spin2 < 4; ++spin2) {
+	      for(size_t spin1=0; spin1 < 4; ++spin1) {
+		for(size_t color2=0; color2 < 3; ++color2) {
+		  for(size_t color1=0;color1 < 3; ++color1) {
+		    
+		    float r = static_cast<float>(0 + 2*(color1 + 3*(color2 + 3*(spin1 + 4*(spin2 + 4*site)))));
+		    float i = static_cast<float>(1 + 2*(color1 + 3*(color2 + 3*(spin1 + 4*(spin2 + 4*site)))));
+		    ASSERT_FLOAT_EQ( z_mirror(site,spin2,spin1,color2,color1,0), 5.0f*r);
+		    ASSERT_FLOAT_EQ( z_mirror(site,spin2,spin1,color2,color1,1), 5.0f*i);
+		  }
 		}
+	      }
+	    }
+	  }
 	}
 
 
