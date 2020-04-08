@@ -4,16 +4,14 @@
 # Add the Googletest directory and mark its targets etc as advanced
 add_subdirectory("${PROJECT_SOURCE_DIR}/extern/googletest" "extern/googletest")
 mark_as_advanced(
-    BUILD_GMOCK BUILD_GTEST BUILD_SHARED_LIBS
-    gmock_build_tests gtest_build_samples gtest_build_tests
+    BUILD_GTEST BUILD_SHARED_LIBS
+    gtest_build_samples gtest_build_tests
     gtest_disable_pthreads gtest_force_shared_crt gtest_hide_internal_symbols
 )
 
 # Do this to Keep IDE's happy according to introduction to modern cmake
 set_target_properties(gtest PROPERTIES FOLDER extern)
 set_target_properties(gtest_main PROPERTIES FOLDER extern)
-set_target_properties(gmock PROPERTIES FOLDER extern)
-set_target_properties(gmock_main PROPERTIES FOLDER extern)
 
 add_library( testutils test_env.cpp )
 
@@ -43,8 +41,6 @@ endmacro()
 # Here TESTNAME is test1
 # and ARGN is test1.cpp
 package_add_test(test1 test1.cpp)
-#package_add_test(test2 test2.cpp)
-#package_add_test(test_add test_add.cpp)
 package_add_test(test3 test3.cpp)
 package_add_test(test_add2 test_add2.cpp)
 package_add_test(test_add_olattice test_add_olattice.cpp)
