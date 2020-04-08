@@ -185,115 +185,81 @@ TEST(Test3, TestSiteProp)
 }
 
 
-template<typename T>
-struct Functor {
-	T& p;
-	void func() {
-		       Kokkos::parallel_for(20, KOKKOS_LAMBDA(const int site){
-                for(int spin2=0; spin2 < 4; ++spin2) {
-                        for(int spin1=0; spin1 < 4; ++spin1 ) {
-                                for(int col2=0; col2 < 3; ++col2) {
-                                        for(int col1=0; col1 < 3; ++col1) {
-
-                                                 p.elem(site).elem(spin2,spin1).elem(col2,col1).real() *= 0.5;
-                                                 p.elem(site).elem(spin2,spin1).elem(col2,col1).real() += 2.6;
-
-                                                 p.elem(site).elem(spin2,spin1).elem(col2,col1).imag() *= 0.5;
-                                                 p.elem(site).elem(spin2,spin1).elem(col2,col1).imag() += 2.6;
-
-                                        }
-
-                                }
-                        }
-                }
-        });
-
-        Kokkos::fence(); // Fence is necessary
-
-
+void testLatPropProp(void)
+{
+  using storage =typename Kokkos::View<float*[4][4][3][3][2],TestMemSpace>;
+  storage prop_storage("p", 20); // 20 sites
+  storage ref_storage("p_ref", 20);
+  
+  Kokkos::parallel_for(20, KOKKOS_LAMBDA(const int site) {
+      for(int spin2=0; spin2 < 4; ++spin2) {
+	for(int spin1=0; spin1 < 4; ++spin1 ) {
+	  for(int col2=0; col2 < 3; ++col2) {
+	    for(int col1=0; col1 < 3; ++col1) {
+	      for(int reim=0; reim < 2; ++reim ) {
+		float i =  static_cast<float>(reim + 2*(col1 + 3*(col2	
+						   + 3*(spin1 + 4*(spin2+4*site)))));
+		
+		prop_storage(site,spin2,spin1,col2,col1,reim) = i;
+		ref_storage(site,spin2,spin1,col2,col1,reim) = 0.5*i + 2.6;
+	      }
+	    }
+	  }
 	}
-};
+      }
+    });
+  
+  Kokkos::fence();
+  
+  using PropType =  OLattice<
+    PMatrix<
+      PMatrix<
+	RComplex<float, storage, 5, 6>,  // Complex index 5, altogether 6 dims.
+	storage,3, 3,4>,   // colormatrix: dim=3, indices 4,3
+      storage, 4, 1,2>,  // spinmatrix: dim=4, indices 1,2
+    storage,0>; // OLattice: index 0
+  
+  PropType p(prop_storage);
+  
+  Kokkos::parallel_for(20, KOKKOS_LAMBDA(const int site){
+      for(int spin2=0; spin2 < 4; ++spin2) {
+	for(int spin1=0; spin1 < 4; ++spin1 ) {
+	  for(int col2=0; col2 < 3; ++col2) {
+	    for(int col1=0; col1 < 3; ++col1) {
+	      
+	      p.elem(site).elem(spin2,spin1).elem(col2,col1).real() *= 0.5;
+	      p.elem(site).elem(spin2,spin1).elem(col2,col1).real() += 2.6;
+	      
+	      p.elem(site).elem(spin2,spin1).elem(col2,col1).imag() *= 0.5;
+	      p.elem(site).elem(spin2,spin1).elem(col2,col1).imag() += 2.6;
+	      
+	    }
+	    
+	  }
+	}
+      }
+    });
+  
+  Kokkos::fence(); // Fence is necessary
+  
+  // Checking is off device
+  for(int site=0; site < 20; ++site) {
+    for(int spin2=0; spin2 < 4; ++spin2) {
+      for(int spin1=0; spin1 < 4; ++spin1 ) {
+	for(int col2=0; col2 < 3; ++col2) {
+	  for(int col1=0; col1 < 3; ++col1) {
+	    for(int reim=0; reim < 2; ++reim) {
+	      ASSERT_FLOAT_EQ( prop_storage(site,spin2,spin1,col2,col1,reim),
+			       ref_storage(site,spin2,spin1,col2,col1,reim) );
+	    }
+	  }
+	}
+      }
+    }
+  }
+}
 
 TEST(Test3, TestLatPropProp)
 {
-	using storage =typename Kokkos::View<float*[4][4][3][3][2],TestMemSpace>;
-	storage prop_storage("p", 20); // 20 sites
-	storage ref_storage("p_ref", 20);
-
-	for(int site=0; site < 20; ++site) {
-		for(int spin2=0; spin2 < 4; ++spin2) {
-			for(int spin1=0; spin1 < 4; ++spin1 ) {
-				for(int col2=0; col2 < 3; ++col2) {
-					for(int col1=0; col1 < 3; ++col1) {
-						for(int reim=0; reim < 2; ++reim ) {
-						  float i =  static_cast<float>(reim + 2*(col1 + 3*(col2\
-												    + 3*(spin1 + 4*(spin2+4*site)))));
-						  prop_storage(site,spin2,spin1,col2,col1,reim) = i;
-							  
-
-						  //						  ref_storage(site,spin2,spin1,col2,col1,reim) = 0.5*prop_storage(site,spin2,spin1,col2,col1,reim)+2.6;
-						  ref_storage(site,\
-							      spin2,spin1,col2,col1,reim) = 0.5*i + 2.6;
-						}
-					}
-				}
-			}
-		}
-	}
-
-	//	Kokkos::fence();
-
-	using PropType =  OLattice<
-						PMatrix<
-			             PMatrix<
-					      RComplex<float, storage, 5, 6>,  // Complex index 5, altogether 6 dims.
-					     storage,3, 3,4>,   // colormatrix: dim=3, indices 4,3
-			            storage, 4, 1,2>,  // spinmatrix: dim=4, indices 1,2
-					   storage,0>; // OLattice: index 0
-
-	PropType p(prop_storage);
-
-#if 0
-	Kokkos::parallel_for(20, KOKKOS_LAMBDA(const int site){
-		for(int spin2=0; spin2 < 4; ++spin2) {
-			for(int spin1=0; spin1 < 4; ++spin1 ) {
-				for(int col2=0; col2 < 3; ++col2) {
-					for(int col1=0; col1 < 3; ++col1) {
-
-						 p.elem(site).elem(spin2,spin1).elem(col2,col1).real() *= 0.5;
-						 p.elem(site).elem(spin2,spin1).elem(col2,col1).real() += 2.6;
-
-						 p.elem(site).elem(spin2,spin1).elem(col2,col1).imag() *= 0.5;
-						 p.elem(site).elem(spin2,spin1).elem(col2,col1).imag() += 2.6;
-
-					}
-
-				}
-			}
-		}
-	});
-
-	Kokkos::fence(); // Fence is necessary
-#else
-	Functor<PropType> f{p};
-	f.func();
-#endif
-
-	// Checking is off device
-	for(int site=0; site < 20; ++site) {
-		for(int spin2=0; spin2 < 4; ++spin2) {
-			for(int spin1=0; spin1 < 4; ++spin1 ) {
-				for(int col2=0; col2 < 3; ++col2) {
-					for(int col1=0; col1 < 3; ++col1) {
-						for(int reim=0; reim < 2; ++reim) {
-							ASSERT_FLOAT_EQ( prop_storage(site,spin2,spin1,col2,col1,reim),
-									ref_storage(site,spin2,spin1,col2,col1,reim) );
-						}
-					}
-				}
-			}
-		}
-	}
-
-
+  testLatPropProp();
 }
