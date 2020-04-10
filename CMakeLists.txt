@@ -16,7 +16,7 @@ include(CMakePackageConfigHelpers)
 #configure_file(include/myproj_config.h.cmake.in include/myproj_config.h)
 
 set(CMAKE_CXX_STANDARD 14)
-
+set(CMAKE_CXX_EXTENSIONS OFF)
 
 #Make libs here 
 #add_subdirectory(lib)
