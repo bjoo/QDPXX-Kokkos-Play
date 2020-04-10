@@ -40,8 +40,7 @@ endmacro()
 # Here TESTNAME is test1
 # and ARGN is test1.cpp
 package_add_test(test1 test1.cpp)
-#package_add_test(test2 test2.cpp)
-#package_add_test(test_add test_add.cpp)
 package_add_test(test3 test3.cpp)
 package_add_test(test_add2 test_add2.cpp)
 package_add_test(test_add_olattice test_add_olattice.cpp)
+package_add_test(bw_tests bw_tests.cpp) 

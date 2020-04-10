@@ -9,13 +9,21 @@
 #include "gtest/gtest.h"
 #include "test3.hpp"
 #include "binop_add_olattice.hpp"
+#include "Kokkos_Macros.hpp"
 #include "Kokkos_Core.hpp"
 #include <type_traits>
 
 using namespace Playground;
-using TestMemSpace = Kokkos::CudaSpace;
 
-void testOLatticeSpinorAdd()
+#if defined(KOKKOS_ENABLE_CUDA)
+using TestMemSpace=Kokkos::CudaSpace;
+#elif defined(KOKKOS_ENABLE_HIP)
+using TestMemSpace = Kokkos::Experimental::HIPSpace;
+#elif defined(KOKKOS_ENABLE_OPENMP)
+using TestMemSpace = Kokkos::HostSpace;
+#endif
+
+void testOLatSpinorAdd(void)
 {
   using storage=typename Kokkos::View<float*[4][3][2],TestMemSpace>;
   using LatticeFermion = OLattice<
@@ -29,7 +37,7 @@ void testOLatticeSpinorAdd()
   LatticeFermion x(20);
   LatticeFermion y(20);
   LatticeFermion z(20);
-  
+
   // Poor man's fill
   Kokkos::parallel_for(20,KOKKOS_LAMBDA(const size_t site) {
       for(size_t spin=0; spin < 4; ++spin) {
@@ -48,9 +56,10 @@ void testOLatticeSpinorAdd()
       }
     });
   Kokkos::fence();
+
   // Some expression
   evaluate( z, x + (x + y) );
-  
+
   {
     auto z_mirror = Kokkos::create_mirror(z._data);
     Kokkos::deep_copy(z_mirror, z._data);
@@ -61,20 +70,22 @@ void testOLatticeSpinorAdd()
 	for(size_t color=0; color < 3; ++color) {
 	  float r = static_cast<float>(0 + 2*(color + 3*(spin + 4*site)));
 	  float i = static_cast<float>(1 + 2*(color + 3*(spin + 4*site)));
-	  ASSERT_FLOAT_EQ( z_mirror(site,spin,color,0), 4.0f*r);
-	  ASSERT_FLOAT_EQ( z_mirror(site,spin,color,1), 4.0f*i);
+		ASSERT_FLOAT_EQ( z_mirror(site,spin,color,0), 4.0f*r);
+		ASSERT_FLOAT_EQ( z_mirror(site,spin,color,1), 4.0f*i);
 	}
       }
     }
   }
+  
 }
 
 TEST(Test4, OLatticeSpinorAdd)
 {
-  testOLatticeSpinorAdd();
+  testOLatSpinorAdd();
 }
 
-void testOLatticePropAdd(void)
+
+void testOLatPropAdd(void)
 {
   // types
   using storage=typename Kokkos::View<float*[4][4][3][3][2],TestMemSpace>;
@@ -89,6 +100,7 @@ void testOLatticePropAdd(void)
   LatticePropagator x(20);
   LatticePropagator y(20);
   LatticePropagator z(20);
+  
   
   // Poor man's fill: on-device
   Kokkos::parallel_for(20,KOKKOS_LAMBDA(const size_t site) {
@@ -139,8 +151,9 @@ void testOLatticePropAdd(void)
     }
   }
 }
-// Test PMatrix
+
+
 TEST(Test4, OLatticePropAdd)
 {
-  testOLatticePropAdd();
+  testOLatPropAdd();
 }

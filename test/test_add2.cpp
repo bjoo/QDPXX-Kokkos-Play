@@ -10,11 +10,19 @@
 #include "gtest/gtest.h"
 
 #include "binop_add.hpp"
+#include "Kokkos_Macros.hpp"
 #include "Kokkos_Core.hpp"
 #include <type_traits>
 using namespace Playground;
 
+#if defined(KOKKOS_ENABLE_CUDA)
 using TestMemSpace=Kokkos::CudaUVMSpace;
+#elif defined(KOKKOS_ENABLE_HIP)
+using TestMemSpace = Kokkos::Experimental::HIPHostPinnedSpace;
+#elif defined(KOKKOS_ENABLE_OPENMP)
+using TestMemSpace = Kokkos::HostSpace;
+#endif
+
 TEST(ExprTests, CreateRLeaf)
 {
 	using storage_type = typename Kokkos::View<float[1],TestMemSpace>;

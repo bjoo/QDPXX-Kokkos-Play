@@ -8,11 +8,17 @@
 #include "gtest/gtest.h"
 
 #include "test3.hpp"
-
+#include "Kokkos_Macros.hpp"
 
 using namespace Playground;
 
-using TestMemSpace = Kokkos::CudaUVMSpace;
+#if defined(KOKKOS_ENABLE_CUDA)
+using TestMemSpace=Kokkos::CudaUVMSpace;
+#elif defined(KOKKOS_ENABLE_HIP)
+using TestMemSpace = Kokkos::Experimental::HIPHostPinnedSpace;
+#elif defined(KOKKOS_ENABLE_OPENMP)
+using TestMemSpace = Kokkos::HostSpace;
+#endif
 
 TEST(Test3, TestRScalar)
 {
@@ -185,18 +191,21 @@ TEST(Test3, TestSiteProp)
 }
 
 
-void testLatPropProp(void)
+
+void testLatTestProp(void)
 {
   using storage =typename Kokkos::View<float*[4][4][3][3][2],TestMemSpace>;
   storage prop_storage("p", 20); // 20 sites
   storage ref_storage("p_ref", 20);
-  
-  Kokkos::parallel_for(20, KOKKOS_LAMBDA(const int site) {
+	
+  Kokkos::parallel_for( 20, KOKKOS_LAMBDA(const int site){
+
       for(int spin2=0; spin2 < 4; ++spin2) {
 	for(int spin1=0; spin1 < 4; ++spin1 ) {
 	  for(int col2=0; col2 < 3; ++col2) {
 	    for(int col1=0; col1 < 3; ++col1) {
 	      for(int reim=0; reim < 2; ++reim ) {
+
 		float i =  static_cast<float>(reim + 2*(col1 + 3*(col2	
 						   + 3*(spin1 + 4*(spin2+4*site)))));
 		
@@ -208,7 +217,7 @@ void testLatPropProp(void)
 	}
       }
     });
-  
+
   Kokkos::fence();
   
   using PropType =  OLattice<
@@ -220,8 +229,8 @@ void testLatPropProp(void)
     storage,0>; // OLattice: index 0
   
   PropType p(prop_storage);
-  
-  Kokkos::parallel_for(20, KOKKOS_LAMBDA(const int site){
+
+  Kokkos::parallel_for(20, KOKKOS_LAMBDA(const int site) {
       for(int spin2=0; spin2 < 4; ++spin2) {
 	for(int spin1=0; spin1 < 4; ++spin1 ) {
 	  for(int col2=0; col2 < 3; ++col2) {
@@ -239,7 +248,6 @@ void testLatPropProp(void)
 	}
       }
     });
-  
   Kokkos::fence(); // Fence is necessary
   
   // Checking is off device
@@ -261,5 +269,7 @@ void testLatPropProp(void)
 
 TEST(Test3, TestLatPropProp)
 {
-  testLatPropProp();
+
+  testLatTestProp();
+
 }
