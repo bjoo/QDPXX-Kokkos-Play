@@ -8,11 +8,17 @@
 #include "gtest/gtest.h"
 
 #include "test3.hpp"
-
+#include "Kokkos_Macros.hpp"
 
 using namespace Playground;
 
-using TestMemSpace = Kokkos::CudaUVMSpace;
+#if defined(KOKKOS_ENABLE_CUDA)
+using TestMemSpace=Kokkos::CudaUVMSpace;
+#elif defined(KOKKOS_ENABLE_HIP)
+using TestMemSpace = Kokkos::Experimental::HIPHostPinnedSpace;
+#elif defined(KOKKOS_ENABLE_OPENMP)
+using TestMemSpace = Kokkos::HostSpace;
+#endif
 
 TEST(Test3, TestRScalar)
 {

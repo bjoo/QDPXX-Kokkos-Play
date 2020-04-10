@@ -1,4 +1,6 @@
 #include "gtest/gtest.h"
+
+#include "Kokkos_Macros.hpp"
 #include "Kokkos_Core.hpp"
 #include "test3.hpp"
 #include "binop_add_olattice.hpp"
@@ -15,9 +17,15 @@ constexpr size_t Vcb = Lxh*Ly*Lz*Lt;
 
 constexpr size_t n_repeats = 3;
 constexpr size_t n_warms = 5;
-constexpr size_t n_iters = 10;
+constexpr size_t n_iters = 100;
 
-using TestMemSpace = Kokkos::CudaSpace;
+#if defined(KOKKOS_ENABLE_CUDA)
+using TestMemSpace=Kokkos::CudaSpace;
+#elif defined(KOKKOS_ENABLE_HIP)
+using TestMemSpace = Kokkos::Experimental::HIPSpace;
+#elif defined(KOKKOS_ENABLE_OPENMP)
+using TestMemSpace = Kokkos::HostSpace;
+#endif
 
 void testSpinorAddBW(void)
 {

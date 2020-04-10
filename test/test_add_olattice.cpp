@@ -9,11 +9,19 @@
 #include "gtest/gtest.h"
 #include "test3.hpp"
 #include "binop_add_olattice.hpp"
+#include "Kokkos_Macros.hpp"
 #include "Kokkos_Core.hpp"
 #include <type_traits>
 
 using namespace Playground;
-using TestMemSpace = Kokkos::CudaSpace;
+
+#if defined(KOKKOS_ENABLE_CUDA)
+using TestMemSpace=Kokkos::CudaSpace;
+#elif defined(KOKKOS_ENABLE_HIP)
+using TestMemSpace = Kokkos::Experimental::HIPSpace;
+#elif defined(KOKKOS_ENABLE_OPENMP)
+using TestMemSpace = Kokkos::HostSpace;
+#endif
 
 void testOLatSpinorAdd(void)
 {
