@@ -115,7 +115,7 @@ template<typename T>
 struct RScalarLocal;
 
 // The view based type
-template<typename T, typename ViewType, size_t _NumDims=1>
+template<typename T, typename ViewType, size_t ParentNumDims=1>
 struct RScalar {
 
   // This is a view which should be ok on device
@@ -123,8 +123,7 @@ struct RScalar {
 
   // The indices already frozen
   KokkosIndices _indices;
-
-  Indexer<ViewType, _NumDims> _idx;
+  Indexer<ViewType, ParentNumDims> _idx;
   
   // Construct from a view and fixed indices
   KOKKOS_INLINE_FUNCTION
@@ -162,6 +161,12 @@ struct RScalarLocal {
 	// The Data
 	T _data;
 
+	// Use array type following Kokkos convention
+	using array_type = T;
+
+	template<typename ViewType, size_t NumDims=1>
+	using GlobalType = RScalar<T,ViewType,NumDims>;
+
 	KOKKOS_INLINE_FUNCTION
 	RScalarLocal(void) {}
 
@@ -195,15 +200,15 @@ struct RScalarLocal {
 	}
 };
 
-template<typename T, typename ViewType, size_t N>
+template<typename T, typename ViewType, size_t NumDims>
 KOKKOS_INLINE_FUNCTION
-RScalar<T,ViewType,N>::RScalar( const RScalarLocal<T>& local_in ) {
+RScalar<T,ViewType,NumDims>::RScalar( const RScalarLocal<T>& local_in ) {
 	(*this).elem() = local_in.elem();
 }
 
-template<typename T, typename ViewType, size_t N>
+template<typename T, typename ViewType,  size_t NumDims>
 KOKKOS_INLINE_FUNCTION
-RScalar<T,ViewType,N>& RScalar<T,ViewType,N>::operator=(const RScalarLocal<T>& local_in ) {
+RScalar<T,ViewType,NumDims>& RScalar<T,ViewType,NumDims>::operator=(const RScalarLocal<T>& local_in ) {
 	(*this).elem() = local_in.elem();
 	return (*this);
 }
@@ -211,11 +216,13 @@ RScalar<T,ViewType,N>& RScalar<T,ViewType,N>::operator=(const RScalarLocal<T>& l
 template<typename T>
 struct RComplexLocal;
 
-template<typename T, typename ViewType, size_t _IdxPos, size_t _NumDims >
+template<typename T, typename ViewType, size_t ParentNumDims >
 struct RComplex {
 	ViewType _data;
 	KokkosIndices _indices;
-  Indexer<ViewType, _NumDims> _idx;
+	Indexer<ViewType, ParentNumDims+1> _idx;       // Num dims is of the parent. I have 1 extra
+	static constexpr size_t _myIdxPos = ParentNumDims;   // Idx pos is the last idx pos of parent. I have extra
+
 	KOKKOS_INLINE_FUNCTION
 	RComplex(ViewType data_in, KokkosIndices indices) : _data(data_in), _indices(indices), _idx() {};
 
@@ -234,14 +241,14 @@ struct RComplex {
 	KOKKOS_INLINE_FUNCTION
 	T& real() const {
 		KokkosIndices new_idx(_indices);
-		new_idx[ _IdxPos ] = 0;
+		new_idx[_myIdxPos] = 0;
 		return _idx(_data, new_idx );
 	}
 
 	KOKKOS_INLINE_FUNCTION
 	T& imag() const {
 		KokkosIndices new_idx(_indices);
-		new_idx[ _IdxPos ] = 1;
+		new_idx[ _myIdxPos ] = 1;
 		return _idx(_data, new_idx );
 	}
 
@@ -252,19 +259,26 @@ template<typename T >
 struct RComplexLocal {
 	T _data[2];
 
+	using array_type = T[2];
+
+	// IdxPos is the last index of the parent
+	// NumDims is the total number of dimensions
+	template<typename ViewType, size_t ParentNumDims >
+	using GlobalType = RComplex<T,ViewType,ParentNumDims>;
+
 	KOKKOS_INLINE_FUNCTION
 	RComplexLocal() {}
 
 	KOKKOS_INLINE_FUNCTION
 	RComplexLocal( const T& re, const T& im ) : _data{re,im} {}
 
-	template<typename ViewType, size_t IdxPos, size_t NumDims >
+	template<typename ViewType, size_t ParentNumDims>
 	KOKKOS_INLINE_FUNCTION
-	RComplexLocal( const RComplex<T,ViewType,IdxPos,NumDims>& in) : _data{ in.real(), in.imag() } {}
+	RComplexLocal( const RComplex<T,ViewType,ParentNumDims>& in) : _data{ in.real(), in.imag() } {}
 
-	template<typename ViewType, size_t IdxPos, size_t NumDims >
+	template<typename ViewType, size_t ParentNumDims >
 	KOKKOS_INLINE_FUNCTION
-	RComplexLocal& operator=(const RComplex<T,ViewType,IdxPos,NumDims>& in) {
+	RComplexLocal& operator=(const RComplex<T,ViewType,ParentNumDims>& in) {
 		_data[0] = in.real();
 		_data[1] = in.imag();
 		return (*this);
@@ -293,14 +307,14 @@ struct RComplexLocal {
 
 };
 
-template<typename T, typename ViewType, size_t IdxPos, size_t NumDims >
+template<typename T, typename ViewType,  size_t ParentNumDims >
 KOKKOS_INLINE_FUNCTION
-RComplex<T,ViewType,IdxPos,NumDims>::RComplex( const RComplexLocal<T>& in ) : _data{in.real(),in.imag()} {}
+RComplex<T,ViewType,ParentNumDims>::RComplex( const RComplexLocal<T>& in ) : _data{in.real(),in.imag()} {}
 
-template<typename T, typename ViewType, size_t IdxPos, size_t NumDims >
+template<typename T, typename ViewType, size_t ParentNumDims >
 KOKKOS_INLINE_FUNCTION
-RComplex<T,ViewType,IdxPos,NumDims>&
-RComplex<T,ViewType,IdxPos,NumDims>::operator=(const RComplexLocal<T>& in ) {
+RComplex<T,ViewType,ParentNumDims>&
+RComplex<T,ViewType,ParentNumDims>::operator=(const RComplexLocal<T>& in ) {
 	(*this).real() = in.real();
 	(*this).imag() = in.imag();
 	return (*this);
@@ -311,12 +325,17 @@ RComplex<T,ViewType,IdxPos,NumDims>::operator=(const RComplexLocal<T>& in ) {
 template<typename T, size_t N>
 struct PVectorLocal;
 
-template<typename T, typename ViewType, size_t _N, size_t _IdxPos >
+template<typename T, typename ViewType, size_t _N, size_t ParentNumDims >
 struct PVector {
 	ViewType _data;
 	KokkosIndices _indices;
 
+
 	using my_local_type = PVectorLocal<typename LocalType<T>::type, _N>;
+
+
+	static constexpr size_t _myIdxPos = ParentNumDims;
+
 	// View Type cannot be default constructed
 	PVector() = delete;
 
@@ -339,14 +358,20 @@ struct PVector {
 	KOKKOS_INLINE_FUNCTION
 	auto elem(size_t i) const {
 		KokkosIndices new_idx(_indices);
-		new_idx[_IdxPos] = i;
-		return T(_data, new_idx);
+		new_idx[ _myIdxPos ] = i;
+		using Ret_type = typename T::template GlobalType<ViewType, ParentNumDims+1>;
+		return  Ret_type(_data, new_idx );
 	}
 
 };
 
 template<typename T, size_t _N>
 struct PVectorLocal {
+
+	template<typename ViewType, size_t ParentNumDims >
+	using GlobalType =  PVector<T, ViewType, _N, ParentNumDims>;
+
+	using array_type = typename T::array_type[_N];
 
 	// Will bottom out at a float or double or some such
 	using local_subtype = typename LocalType<T>::type;
@@ -408,19 +433,19 @@ struct PVectorLocal {
 
 
 // Initialize from a local type -- this was predeclared now we can write it
-template<typename T, typename ViewType, size_t _N, size_t _IdxPos>
+template<typename T, typename ViewType, size_t _N, size_t ParentNumDims>
 KOKKOS_INLINE_FUNCTION
-PVector<T,ViewType,_N,_IdxPos>::PVector(const typename PVector::my_local_type& in) {
+PVector<T,ViewType,_N, ParentNumDims>::PVector(const typename PVector::my_local_type& in) {
 	for(size_t i=0; i < _N; ++i) {
 		(*this).elem(i) = in.elem(i);
 	}
 }
 
 // Assign from a local type
-template<typename T, typename ViewType, size_t _N, size_t _IdxPos>
+template<typename T, typename ViewType, size_t _N, size_t ParentNumDims>
 KOKKOS_INLINE_FUNCTION
-PVector<T,ViewType,_N,_IdxPos>&
-PVector<T,ViewType,_N,_IdxPos>::operator=(const PVector::my_local_type& in ){
+PVector<T,ViewType,_N,ParentNumDims>&
+PVector<T,ViewType,_N,ParentNumDims>::operator=(const PVector::my_local_type& in ){
 	for(size_t i=0; i < _N; ++i) {
 		(*this).elem(i) = in.elem(i);
 	}
@@ -429,10 +454,10 @@ PVector<T,ViewType,_N,_IdxPos>::operator=(const PVector::my_local_type& in ){
 
 
 // Move assign from a local type
-template<typename T, typename ViewType, size_t _N, size_t _IdxPos>
+template<typename T, typename ViewType, size_t _N, size_t ParentNumDims>
 KOKKOS_INLINE_FUNCTION
-PVector<T,ViewType,_N,_IdxPos>&
-PVector<T,ViewType,_N,_IdxPos>::operator=(PVector::my_local_type&& in ){
+PVector<T,ViewType,_N, ParentNumDims>&
+PVector<T,ViewType,_N, ParentNumDims>::operator=(PVector::my_local_type&& in ){
 	for(size_t i=0; i < _N; ++i) {
 		(*this).elem(i) = in.elem(i);
 	}
@@ -442,8 +467,10 @@ PVector<T,ViewType,_N,_IdxPos>::operator=(PVector::my_local_type&& in ){
 template<typename T, size_t _N>
 struct PMatrixLocal;
 
-template<typename T, typename ViewType, size_t _N, size_t _IdxPos1, size_t _IdxPos2 >
+template<typename T, typename ViewType, size_t _N, size_t ParentNumDims >
 struct PMatrix {
+	static constexpr size_t _myIdxPos1=ParentNumDims;
+	static constexpr size_t _myIdxPos2=ParentNumDims+1;
 	ViewType _data;
 	KokkosIndices _indices;
 	using my_local_type = PMatrixLocal<typename LocalType<T>::type, _N>;
@@ -466,9 +493,10 @@ struct PMatrix {
 	KOKKOS_INLINE_FUNCTION
 	auto elem(size_t i, size_t j) const {
 		KokkosIndices new_idx(_indices);
-		new_idx[_IdxPos1] = i;
-		new_idx[_IdxPos2] = j;
-		return T(_data, new_idx);
+		new_idx[_myIdxPos1] = i;
+		new_idx[_myIdxPos2] = j;
+		using Ret_type = typename T::template GlobalType<ViewType,ParentNumDims+2>;
+		return Ret_type(_data, new_idx);
 	}
 
 };
@@ -476,7 +504,12 @@ struct PMatrix {
 template<typename T, size_t N>
 struct PMatrixLocal {
 	using local_subtype = typename LocalType<T>::type;
+	using array_type = typename T::array_type[N][N];
+
 	local_subtype _data[N][N];
+
+	template<typename ViewType, size_t ParentNumDims >
+	using GlobalType = PMatrix<T, ViewType, N, ParentNumDims>;
 
 	static constexpr
 	KOKKOS_INLINE_FUNCTION
@@ -485,9 +518,9 @@ struct PMatrixLocal {
 	KOKKOS_INLINE_FUNCTION
 	explicit PMatrixLocal() {}
 
-	template<typename ViewType, size_t _IdxPos1, size_t _IdxPos2>
+	template<typename ViewType, size_t ParentNumDims>
 	KOKKOS_INLINE_FUNCTION
-	PMatrixLocal(const PMatrix<T,ViewType,N, _IdxPos1, _IdxPos2>& in) {
+	PMatrixLocal(const PMatrix<T,ViewType,N, ParentNumDims>& in) {
 		for(int j=0; j < N; ++j) {
 			for(int i=0; i < N; ++i) {
 				(*this).elem(i,j) = in.elem(i,j);
@@ -495,9 +528,9 @@ struct PMatrixLocal {
 		}
 	}
 
-	template<typename ViewType, size_t _IdxPos1, size_t _IdxPos2>
+	template<typename ViewType, size_t ParentNumDims>
 	KOKKOS_INLINE_FUNCTION
-	PMatrixLocal& operator=(const PMatrix<T,ViewType,N, _IdxPos1, _IdxPos2>& in) {
+	PMatrixLocal& operator=(const PMatrix<T,ViewType,N, ParentNumDims>& in) {
 		for(int j=0; j < N; ++j) {
 			for(int i=0; i < N; ++i) {
 				(*this).elem(i,j) = in.elem(i,j);
@@ -506,9 +539,9 @@ struct PMatrixLocal {
 		return (*this);
 	}
 
-	template<typename ViewType, size_t _IdxPos1, size_t _IdxPos2>
+	template<typename ViewType, size_t ParentNumDims>
 	KOKKOS_INLINE_FUNCTION
-	PMatrixLocal& operator=(PMatrix<T,ViewType,N, _IdxPos1, _IdxPos2>&& in) {
+	PMatrixLocal& operator=(PMatrix<T,ViewType,N,ParentNumDims>&& in) {
 		for(int j=0; j < N; ++j) {
 			for(int i=0; i < N; ++i) {
 				(*this).elem(i,j) = in.elem(i,j);
@@ -529,9 +562,9 @@ struct PMatrixLocal {
 	}
 };
 
-template<typename T, typename ViewType, size_t _N, size_t _IdxPos1, size_t _IdxPos2>
+template<typename T, typename ViewType, size_t _N, size_t ParentNumDims>
 KOKKOS_INLINE_FUNCTION
-PMatrix<T,ViewType,_N, _IdxPos1, _IdxPos2>::PMatrix( const PMatrix::my_local_type& in) {
+PMatrix<T,ViewType,_N, ParentNumDims>::PMatrix( const PMatrix::my_local_type& in) {
 	for(int j=0; j < _N; ++j) {
 		for(int i=0; i < _N; ++i) {
 			(*this).elem(i,j) = in.elem(i,j);
@@ -540,10 +573,10 @@ PMatrix<T,ViewType,_N, _IdxPos1, _IdxPos2>::PMatrix( const PMatrix::my_local_typ
 
 }
 
-template<typename T, typename ViewType, size_t _N, size_t _IdxPos1, size_t _IdxPos2>
+template<typename T, typename ViewType, size_t _N, size_t ParentNumDims>
 KOKKOS_INLINE_FUNCTION
-PMatrix<T,ViewType,_N, _IdxPos1, _IdxPos2>&
-PMatrix<T,ViewType,_N, _IdxPos1, _IdxPos2>::operator=( const PMatrix::my_local_type& in) {
+PMatrix<T,ViewType,_N, ParentNumDims>&
+PMatrix<T,ViewType,_N, ParentNumDims>::operator=( const PMatrix::my_local_type& in) {
 	for(int j=0; j < _N; ++j) {
 		for(int i=0; i < _N; ++i) {
 			(*this).elem(i,j) = in.elem(i,j);
@@ -552,10 +585,10 @@ PMatrix<T,ViewType,_N, _IdxPos1, _IdxPos2>::operator=( const PMatrix::my_local_t
 	return (*this);
 }
 
-template<typename T, typename ViewType, size_t _N, size_t _IdxPos1, size_t _IdxPos2>
+template<typename T, typename ViewType, size_t _N, size_t ParentNumDims>
 KOKKOS_INLINE_FUNCTION
-PMatrix<T,ViewType,_N, _IdxPos1, _IdxPos2>&
-PMatrix<T,ViewType,_N, _IdxPos1, _IdxPos2>::operator=(PMatrix::my_local_type&& in) {
+PMatrix<T,ViewType,_N, ParentNumDims>&
+PMatrix<T,ViewType,_N, ParentNumDims>::operator=(PMatrix::my_local_type&& in) {
 	for(int j=0; j < _N; ++j) {
 		for(int i=0; i < _N; ++i) {
 			(*this).elem(i,j) = in.elem(i,j);
@@ -604,8 +637,8 @@ struct LocalType< RScalar<T, ViewType, NumDims> > {
 	using type =  RScalarLocal<typename LocalType<T>::type>;
 };
 
-template<typename T, typename ViewType, size_t IdxPos, size_t NumDims>
-struct LocalType< RComplex<T, ViewType,IdxPos,NumDims> > {
+template<typename T, typename ViewType, size_t ParentNumDims>
+struct LocalType< RComplex<T, ViewType, ParentNumDims> > {
 	using type = RComplexLocal<typename LocalType<T>::type>;
 };
 
@@ -623,8 +656,8 @@ struct LocalType< RComplexLocal<T> > {
 
 // The local type for a view based type is the local type on its level templated
 // on the local types of its subtypes
-template<typename T, typename ViewType, size_t N, size_t IdxPos1>
-struct LocalType< PVector<T, ViewType, N, IdxPos1> > {
+template<typename T, typename ViewType, size_t N, size_t ParentNumDims>
+struct LocalType< PVector<T, ViewType, N, ParentNumDims> > {
 	using type = PVectorLocal<typename LocalType<T>::type,N>;
 };
 
@@ -635,8 +668,8 @@ struct LocalType< PVectorLocal<T,N> > {
 };
 
 // The local type for a view based type is its local type templated on its local subtypes
-template<typename T, typename ViewType, size_t N, size_t IdxPos1, size_t IdxPos2>
-struct LocalType< PMatrix<T, ViewType, N, IdxPos1, IdxPos2 > > {
+template<typename T, typename ViewType, size_t N, size_t ParentNumDims>
+struct LocalType< PMatrix<T, ViewType, N, ParentNumDims > > {
 	using type = PMatrixLocal<typename LocalType<T>::type,N>;
 };
 
@@ -682,8 +715,8 @@ struct BaseType<ptrdiff_t> {
 	using type=ptrdiff_t;
 };
 
-template<typename T, typename ViewType, size_t NumDims>
-struct BaseType< RScalar<T,ViewType,NumDims> > {
+template<typename T, typename ViewType, size_t ParentNumDims>
+struct BaseType< RScalar<T,ViewType,ParentNumDims> > {
 	using type = typename BaseType<T>::type;
 };
 
@@ -692,8 +725,8 @@ struct BaseType< RScalarLocal<T> >  {
 	using type = typename BaseType<T>::type;
 };
 
-template<typename T, typename ViewType, size_t IdxPos, size_t NumDims>
-struct BaseType< RComplex<T,ViewType,IdxPos,NumDims> > {
+template<typename T, typename ViewType, size_t ParentNumDims>
+struct BaseType< RComplex<T,ViewType,ParentNumDims> > {
 	using type = typename BaseType<T>::type;
 };
 
@@ -702,8 +735,8 @@ struct BaseType< RComplexLocal<T> > {
 	using type = typename BaseType<T>::type;
 };
 
-template<typename T, typename ViewType, size_t N, size_t IdxPos>
-struct BaseType< PVector<T,ViewType,N,IdxPos> > {
+template<typename T, typename ViewType, size_t N, size_t ParentNumDims>
+struct BaseType< PVector<T,ViewType,N,ParentNumDims> > {
 	using type = typename BaseType<T>::type;
 };
 
@@ -712,8 +745,8 @@ struct BaseType< PVectorLocal<T,N> > {
 	using type = typename BaseType<T>::type;
 };
 
-template<typename T, typename ViewType, size_t N, size_t IdxPos1, size_t IdxPos2>
-struct BaseType< PMatrix<T,ViewType,N,IdxPos1,IdxPos2> > {
+template<typename T, typename ViewType, size_t N, size_t ParentNumDims>
+struct BaseType< PMatrix<T,ViewType,N,ParentNumDims> > {
 	using type = typename BaseType<T>::type;
 };
 
@@ -727,21 +760,25 @@ struct BaseType< PMatrixLocal<T,N> > {
 // OLattice type
 //
 //
-template<typename T, typename ViewType, size_t _IdxPos1>
+template<typename T, class S=Kokkos::DefaultExecutionSpace::memory_space>
 struct OLattice {
 
+	// Need to compute ViewType
+	using array_type = typename T::array_type*;
+	using ViewType = Kokkos::View<array_type, S>;
 	ViewType _data;
 	std::size_t _n_elem;
 
-  OLattice(size_t n_elem) : _data("internal", n_elem), _n_elem(n_elem) {}
+	OLattice(size_t n_elem) : _data("internal", n_elem), _n_elem(n_elem) {}
 
-  OLattice(ViewType t) : _data(t), _n_elem(t.extent(0)) {}
+	OLattice(ViewType t) : _data(t), _n_elem(t.extent(0)) {}
 
-  KOKKOS_INLINE_FUNCTION
-  auto elem(size_t i) const {
-    KokkosIndices index{0,0,0,0, 0,0,0,0};
-    index[_IdxPos1 ] = i;
-    return T(_data, index );
+	KOKKOS_INLINE_FUNCTION
+	auto elem(size_t i) const {
+		KokkosIndices index{i,0,0,0, 0,0,0,0};
+
+		using Ret_type = typename T::template GlobalType<ViewType,1>;
+		return Ret_type(_data, index );
   }
 
   KOKKOS_INLINE_FUNCTION
@@ -750,8 +787,8 @@ struct OLattice {
   }
 };
 
-template<typename T, typename ViewType, size_t _IdxPos1>
-struct BaseType< OLattice<T,ViewType,_IdxPos1> > {
+template<typename T,typename MemSpace>
+struct BaseType< OLattice<T,MemSpace> > {
 	using type = typename BaseType<T>::type;
 };
 

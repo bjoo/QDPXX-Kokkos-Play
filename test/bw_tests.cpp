@@ -30,14 +30,13 @@ using TestMemSpace = Kokkos::HostSpace;
 void testSpinorAddBW(void)
 {
 
-  using storage=typename Kokkos::View<float*[4][3][2],TestMemSpace>;
   using LatticeFermion = OLattice<
-    PVector<
-      PVector<
-	RComplex<float,storage,3,4>,
-	storage,3,2>,
-      storage,4,1 >,
-    storage,0>;
+    PVectorLocal<
+      PVectorLocal<
+	    RComplexLocal<float>,
+	  3>,
+    4>,
+    TestMemSpace>;
   
   LatticeFermion x(Vcb);
   LatticeFermion y(Vcb);

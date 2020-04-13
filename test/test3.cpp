@@ -74,7 +74,7 @@ TEST(Test3, TestRComplex)
 	a_storage(1)=2.5;
 
 	KokkosIndices indices{0,0,0,0, 0,0,0,0};
-	RComplex<float,storage,0,1> a(a_storage, indices);
+	RComplex<float,storage,0> a(a_storage, indices);
 
 	ASSERT_FLOAT_EQ( a.real(), a_storage(0));
 	ASSERT_FLOAT_EQ( a.imag(), a_storage(1));
@@ -95,7 +95,7 @@ TEST(Test3, TestRPVectorScalar)
 
 	KokkosIndices indices{0,0,0,0, 0,0,0,0};
 	using storage = typename Kokkos::View<float[3],TestMemSpace>;
-	PVector< RScalar<float,storage,1>, storage, 4, 0> a(a_storage,indices);
+	PVector< RScalarLocal<float>, storage, 4, 0> a(a_storage,indices);
 
 	ASSERT_FLOAT_EQ( a.elem(2).elem(), a_storage(2));
 
@@ -116,7 +116,7 @@ TEST(Test3, TestPMatrixScalar)
 
 
 	KokkosIndices indices{0,0,0,0, 0,0,0,0};
-	PMatrix< RScalar<float,storage,2>, storage, 4, 0,1> a(a_storage, indices);
+	PMatrix< RScalarLocal<float>, storage, 4, 0> a(a_storage, indices);
 
 	ASSERT_FLOAT_EQ( a.elem(1,2).elem(), a_storage(1,2));
 
@@ -135,7 +135,7 @@ TEST(Test3, TestVecVecScalar)
 
 
 	KokkosIndices  indices{0,0,0,0, 0,0,0,0};
-	PVector< PVector< RScalar<float,storage,2>, storage,3, 1>, storage, 4, 0> a(a_storage, indices);
+	PVector< PVectorLocal< RScalarLocal<float>,3>, storage, 4, 0> a(a_storage, indices);
 
 	ASSERT_FLOAT_EQ( a.elem(1).elem(2).elem(), a_storage(1,2));
 
@@ -163,10 +163,10 @@ TEST(Test3, TestSiteProp)
 
 	KokkosIndices indices{0,0,0,0, 0,0,0,0};
 	using PropType =  PMatrix<
-			           PMatrix<
-					     RComplex<float, storage, 4, 5>,  // Complex index 4, altogether 5 dims.
-					   storage,3, 2,3>,   // colormatrix: dim=3, indices 2,3
-			           storage, 4, 0,1>;  // spinmatrix: dim=4, indices 0,1
+			           PMatrixLocal<
+					     RComplexLocal<float>,  // Complex index 4, altogether 5 dims.
+					   3>,   // colormatrix: dim=3, indices 2,3
+			           storage, 4, 0>;  // spinmatrix: dim=4, indices 0,1
 
 	PropType p(prop_storage, indices);
 
@@ -221,12 +221,11 @@ void testLatTestProp(void)
   Kokkos::fence();
   
   using PropType =  OLattice<
-    PMatrix<
-      PMatrix<
-	RComplex<float, storage, 5, 6>,  // Complex index 5, altogether 6 dims.
-	storage,3, 3,4>,   // colormatrix: dim=3, indices 4,3
-      storage, 4, 1,2>,  // spinmatrix: dim=4, indices 1,2
-    storage,0>; // OLattice: index 0
+    PMatrixLocal<
+      PMatrixLocal<
+	    RComplexLocal<float>,
+				  3>,
+				4>, TestMemSpace>;
   
   PropType p(prop_storage);
 

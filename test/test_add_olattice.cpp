@@ -25,14 +25,14 @@ using TestMemSpace = Kokkos::HostSpace;
 
 void testOLatSpinorAdd(void)
 {
-  using storage=typename Kokkos::View<float*[4][3][2],TestMemSpace>;
+
   using LatticeFermion = OLattice<
-    PVector<
-      PVector<
-	RComplex<float,storage,3,4>,
-	storage,3,2>,
-      storage,4,1 >,
-    storage,0>;
+    PVectorLocal<
+      PVectorLocal<
+	     RComplexLocal<float>,
+	  3>,
+     4>, TestMemSpace>;
+
   
   LatticeFermion x(20);
   LatticeFermion y(20);
@@ -87,15 +87,14 @@ TEST(Test4, OLatticeSpinorAdd)
 
 void testOLatPropAdd(void)
 {
-  // types
-  using storage=typename Kokkos::View<float*[4][4][3][3][2],TestMemSpace>;
+
   using LatticePropagator = OLattice<
-    PMatrix<
-      PMatrix<
-	RComplex<float,storage,5,6>,
-	storage,3,3,4>,
-      storage,4,1,2 >,
-    storage,0>;
+    PMatrixLocal<
+      PMatrixLocal<
+	   RComplexLocal<float>,
+	  3>,
+    4>,
+    TestMemSpace>;
   
   LatticePropagator x(20);
   LatticePropagator y(20);
