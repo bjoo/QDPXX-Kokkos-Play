@@ -16,8 +16,8 @@ constexpr size_t Lxh = Lx/2;
 constexpr size_t Vcb = Lxh*Ly*Lz*Lt;
 
 constexpr size_t n_repeats = 3;
-constexpr size_t n_warms = 5;
-constexpr size_t n_iters = 100;
+constexpr size_t n_warms = 10;
+constexpr size_t n_iters = 10;
 
 #if defined(KOKKOS_ENABLE_CUDA)
 using TestMemSpace=Kokkos::CudaSpace;

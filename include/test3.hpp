@@ -221,7 +221,7 @@ struct RComplex {
 	ViewType _data;
 	KokkosIndices _indices;
 	Indexer<ViewType, ParentNumDims+1> _idx;       // Num dims is of the parent. I have 1 extra
-	static constexpr size_t _myIdxPos = ParentNumDims;   // Idx pos is the last idx pos of parent. I have extra
+	
 
 	KOKKOS_INLINE_FUNCTION
 	RComplex(ViewType data_in, KokkosIndices indices) : _data(data_in), _indices(indices), _idx() {};
@@ -241,14 +241,14 @@ struct RComplex {
 	KOKKOS_INLINE_FUNCTION
 	T& real() const {
 		KokkosIndices new_idx(_indices);
-		new_idx[_myIdxPos] = 0;
+		new_idx[ ParentNumDims ] = 0;
 		return _idx(_data, new_idx );
 	}
 
 	KOKKOS_INLINE_FUNCTION
 	T& imag() const {
 		KokkosIndices new_idx(_indices);
-		new_idx[ _myIdxPos ] = 1;
+		new_idx[ ParentNumDims ] = 1;
 		return _idx(_data, new_idx );
 	}
 
@@ -334,7 +334,6 @@ struct PVector {
 	using my_local_type = PVectorLocal<typename LocalType<T>::type, _N>;
 
 
-	static constexpr size_t _myIdxPos = ParentNumDims;
 
 	// View Type cannot be default constructed
 	PVector() = delete;
@@ -358,7 +357,7 @@ struct PVector {
 	KOKKOS_INLINE_FUNCTION
 	auto elem(size_t i) const {
 		KokkosIndices new_idx(_indices);
-		new_idx[ _myIdxPos ] = i;
+		new_idx[ ParentNumDims ] = i;
 		using Ret_type = typename T::template GlobalType<ViewType, ParentNumDims+1>;
 		return  Ret_type(_data, new_idx );
 	}
@@ -469,8 +468,7 @@ struct PMatrixLocal;
 
 template<typename T, typename ViewType, size_t _N, size_t ParentNumDims >
 struct PMatrix {
-	static constexpr size_t _myIdxPos1=ParentNumDims;
-	static constexpr size_t _myIdxPos2=ParentNumDims+1;
+
 	ViewType _data;
 	KokkosIndices _indices;
 	using my_local_type = PMatrixLocal<typename LocalType<T>::type, _N>;
@@ -493,8 +491,8 @@ struct PMatrix {
 	KOKKOS_INLINE_FUNCTION
 	auto elem(size_t i, size_t j) const {
 		KokkosIndices new_idx(_indices);
-		new_idx[_myIdxPos1] = i;
-		new_idx[_myIdxPos2] = j;
+		new_idx[ ParentNumDims ] = i;
+		new_idx[ ParentNumDims +1 ] = j;
 		using Ret_type = typename T::template GlobalType<ViewType,ParentNumDims+2>;
 		return Ret_type(_data, new_idx);
 	}

@@ -10,10 +10,10 @@ export PATH=${SRCDIR}/QDPXX-Kokkos-Play/extern/kokkos/bin:$PATH
 if [ -d ${BUILDDIR} ];
 
 then
-	rm -f ${BUILDDIR}
-	mkdir -p ${BUILDDIR}
+	rm -rf ${BUILDDIR}
 fi
 
+mkdir -p ${BUILDDIR}
 pushd ${BUILDDIR}
 
 cmake \
@@ -24,6 +24,7 @@ cmake \
 	-DKokkos_ENABLE_CUDA_CONSTEXPR=ON \
 	-DCMAKE_CXX_COMPILER=${CXX} \
 	-DCMAKE_CXX_FLAGS="-g -O3" \
+	-DBUILD_GMOCK=OFF \
 	${SRCDIR}/QDPXX-Kokkos-Play
 
 
