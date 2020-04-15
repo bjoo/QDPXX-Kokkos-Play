@@ -103,6 +103,34 @@ TEST(Test3, TestRPVectorScalar)
 	ASSERT_FLOAT_EQ( a_storage(1), 7.2);
 }
 
+TEST(Test3, TestPScalarPVectorScalar)
+{
+	using array_type = float[3][2];
+	using test_type = PScalarLocal< PVectorLocal < RComplexLocal< float >,3>>;
+	bool value =  std::is_same< array_type, test_type::array_type>::value;
+	ASSERT_TRUE(value);
+}
+
+TEST(Test3, TestPScalar2)
+{	using s_type = Kokkos::View<float[10], Kokkos::HostSpace>;
+
+	s_type a_storage("a");
+	for(int i=0; i < 10; ++i) {
+		a_storage(i) = i;
+	}
+
+	KokkosIndices ind={0,0,0,0,0,0,0,0};
+	PScalar<
+	  PScalarLocal<
+	    PVectorLocal< RScalarLocal<float >,10>
+	  >,
+	s_type,0 >  foo(a_storage,ind);
+
+	for(int i=0; i < 10; ++i) {
+		ASSERT_FLOAT_EQ( foo.elem().elem().elem(i).elem(), a_storage(i));
+	}
+}
+
 
 TEST(Test3, TestPMatrixScalar)
 {
@@ -190,8 +218,40 @@ TEST(Test3, TestSiteProp)
 	}
 }
 
+void testLatColorMatrix(void)
+{
+	using storage=typename Kokkos::View<float*[3][3], TestMemSpace>;
+
+	storage ref_storage("ref",20);
+	OLattice< PScalarLocal< PMatrixLocal< RScalarLocal<float>, 3> >, TestMemSpace> latcm(20);
+
+	Kokkos::parallel_for(20, KOKKOS_LAMBDA( const size_t site){
+		for(int i=0; i < 3; ++i) {
+			for(int j=0; j < 3; ++j ) {
+				ref_storage(site,i,j) = static_cast<float>( site + 20*(i + 3*j));
+				latcm.elem(site).elem().elem(i,j).elem() = static_cast<float>( site + 20*(i + 3*j));
+			}
+		}
+
+	});
+	Kokkos::fence();
 
 
+	for(int site=0; site < 20; site++) {
+		for(int i=0; i < 3; ++i) {
+			for(int j=0; j < 3; ++j ) {
+				ref_storage(site,i,j) = static_cast<float>( site + 20*(i + 3*j));
+				latcm.elem(site).elem().elem(i,j).elem() = static_cast<float>( site + 20*(i + 3*j));
+			}
+		}
+
+		}
+}
+
+TEST(Test3, testLatColMatrix)
+{
+	testLatColorMatrix();
+}
 void testLatTestProp(void)
 {
   using storage =typename Kokkos::View<float*[4][4][3][3][2],TestMemSpace>;

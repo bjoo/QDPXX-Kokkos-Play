@@ -321,6 +321,109 @@ RComplex<T,ViewType,ParentNumDims>::operator=(const RComplexLocal<T>& in ) {
 
 }
 
+
+// Forward declar  local type
+template<typename T>
+struct PScalarLocal;
+
+template<typename T, typename ViewType, size_t ParentNumDims >
+struct PScalar {
+	ViewType _data;
+	KokkosIndices _indices;
+	using my_local_type = PScalarLocal<typename LocalType<T>::type>;
+
+	PScalar() = delete;
+
+	KOKKOS_INLINE_FUNCTION
+	PScalar(ViewType data_in, KokkosIndices indices) : _data(data_in), _indices(indices) {}
+
+	// Forward declare Initialize from local type
+	KOKKOS_FUNCTION
+	PScalar(const my_local_type & in );
+
+	KOKKOS_FUNCTION
+	PScalar& operator=(const my_local_type& in);
+
+	// Op Assign from a local type
+	KOKKOS_FUNCTION
+	PScalar& operator=(my_local_type&& in);
+
+	KOKKOS_INLINE_FUNCTION
+	auto elem() const {
+		// Scalar so no increase in the dimension
+		using Ret_type = typename T::template GlobalType<ViewType, ParentNumDims>;
+		return  Ret_type(_data, _indices );
+	}
+};
+
+// A thread local RScalar
+// with compact storage
+template<typename T>
+struct PScalarLocal {
+
+	// The Data
+	T _data;
+
+	// Use array type following Kokkos convention
+	using array_type = typename T::array_type;
+
+	template<typename ViewType, size_t NumDims=1>
+	using GlobalType = PScalar<T,ViewType,NumDims>;
+
+	KOKKOS_INLINE_FUNCTION
+	PScalarLocal(void) {}
+
+	// Initialize with the data
+	KOKKOS_INLINE_FUNCTION
+	PScalarLocal(const T& data_in) : _data(data_in) {};
+
+
+	// Init from an RScalarView (this is known
+	template<typename ViewType, size_t N>
+	PScalarLocal(const PScalar<T,ViewType,N>& view_in) : _data(view_in.elem()) {};
+
+
+	template<typename ViewType, size_t N>
+	KOKKOS_INLINE_FUNCTION
+	PScalarLocal<T>& operator=(const PScalar<T,ViewType,N>& view_in) {
+		(*this).elem()=view_in.elem();
+		return (*this);
+	}
+
+	// Const getter
+	KOKKOS_INLINE_FUNCTION
+	const T& elem() const {
+	  return _data;
+	}
+
+	// setter
+	KOKKOS_INLINE_FUNCTION
+	T& elem() {
+		return _data;
+	}
+};
+
+template<typename T, typename ViewType, size_t NumDims>
+KOKKOS_INLINE_FUNCTION
+PScalar<T,ViewType,NumDims>::PScalar( const PScalar::my_local_type& local_in ) {
+	(*this).elem() = local_in.elem();
+}
+
+template<typename T, typename ViewType,  size_t NumDims>
+KOKKOS_INLINE_FUNCTION
+PScalar<T,ViewType,NumDims>& PScalar<T,ViewType,NumDims>::operator=(const PScalar::my_local_type& local_in ) {
+	(*this).elem() = local_in.elem();
+	return (*this);
+}
+
+template<typename T, typename ViewType,  size_t NumDims>
+KOKKOS_INLINE_FUNCTION
+PScalar<T,ViewType,NumDims>& PScalar<T,ViewType,NumDims>::operator=(PScalar::my_local_type&& local_in ) {
+	(*this).elem() = local_in.elem();
+	return (*this);
+}
+
+
 // Forward declare local type
 template<typename T, size_t N>
 struct PVectorLocal;
@@ -654,6 +757,20 @@ struct LocalType< RComplexLocal<T> > {
 
 // The local type for a view based type is the local type on its level templated
 // on the local types of its subtypes
+template<typename T, typename ViewType, size_t ParentNumDims>
+struct LocalType< PScalar<T, ViewType, ParentNumDims> > {
+	using type = PScalarLocal<typename LocalType<T>::type>;
+};
+
+// The local tpye for a local type is itself
+template<typename T>
+struct LocalType< PScalarLocal<T> > {
+	using type = PScalarLocal<T>;
+};
+
+
+// The local type for a view based type is the local type on its level templated
+// on the local types of its subtypes
 template<typename T, typename ViewType, size_t N, size_t ParentNumDims>
 struct LocalType< PVector<T, ViewType, N, ParentNumDims> > {
 	using type = PVectorLocal<typename LocalType<T>::type,N>;
@@ -730,6 +847,16 @@ struct BaseType< RComplex<T,ViewType,ParentNumDims> > {
 
 template<typename T>
 struct BaseType< RComplexLocal<T> > {
+	using type = typename BaseType<T>::type;
+};
+
+template<typename T, typename ViewType, size_t ParentNumDims>
+struct BaseType< PScalar<T,ViewType,ParentNumDims> > {
+	using type = typename BaseType<T>::type;
+};
+
+template<typename T>
+struct BaseType< PScalarLocal<T> >  {
 	using type = typename BaseType<T>::type;
 };
 
