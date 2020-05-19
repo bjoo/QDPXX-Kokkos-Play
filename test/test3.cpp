@@ -18,6 +18,8 @@ using TestMemSpace=Kokkos::CudaUVMSpace;
 using TestMemSpace = Kokkos::Experimental::HIPHostPinnedSpace;
 #elif defined(KOKKOS_ENABLE_OPENMP)
 using TestMemSpace = Kokkos::HostSpace;
+#elif defined(KOKKOS_ENABLE_OPENMPTARGET)
+using TestMemSpace = Kokkos::Experimental::OpenMPTargetSpace;
 #endif
 
 TEST(Test3, TestRScalar)

@@ -21,6 +21,8 @@ using TestMemSpace=Kokkos::CudaSpace;
 using TestMemSpace = Kokkos::Experimental::HIPSpace;
 #elif defined(KOKKOS_ENABLE_OPENMP)
 using TestMemSpace = Kokkos::HostSpace;
+#elif defined(KOKKOS_ENABLE_OPENMPTARGET)
+using TestMemSpace = Kokkos::Experimental::OpenMPTargetSpace;
 #endif
 
 void testOLatSpinorAdd(void)
