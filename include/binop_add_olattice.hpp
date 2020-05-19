@@ -299,7 +299,7 @@ template<typename T, class MemSpace, typename Expr>
 void evaluate(OLattice<T,MemSpace>& dest, const Expr& expression ) {
 
 	const std::size_t n_sites= dest.num_elem();
-	Kokkos::parallel_for(n_sites,KOKKOS_LAMBDA(const size_t site) {
+	Kokkos::parallel_for("evaluate_olattice",n_sites,KOKKOS_LAMBDA(const size_t site) {
 		dest.elem(site) = expression(site);
 	});
 	Kokkos::fence(); // Apparently this is needed for consistency in UVM space
