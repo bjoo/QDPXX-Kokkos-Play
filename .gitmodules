@@ -4,3 +4,6 @@
 [submodule "extern/kokkos"]
 	path = extern/kokkos
 	url = https://github.com/kokkos/kokkos.git
+[submodule "extern/simd-math"]
+	path = extern/simd-math
+	url = http://github.com/kokkos/simd-math
