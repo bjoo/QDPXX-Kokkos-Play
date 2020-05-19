@@ -894,7 +894,7 @@ struct OLattice {
 	ViewType _data;
 	std::size_t _n_elem;
 
-	OLattice(size_t n_elem) : _data("internal", n_elem), _n_elem(n_elem) {}
+	OLattice(size_t n_elem) : _data("olattice_data", n_elem), _n_elem(n_elem) {}
 
 	OLattice(ViewType t) : _data(t), _n_elem(t.extent(0)) {}
 
