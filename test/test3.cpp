@@ -254,6 +254,7 @@ TEST(Test3, testLatColMatrix)
 {
 	testLatColorMatrix();
 }
+
 void testLatTestProp(void)
 {
   using storage =typename Kokkos::View<float*[4][4][3][3][2],TestMemSpace>;
@@ -333,4 +334,79 @@ TEST(Test3, TestLatPropProp)
 
   testLatTestProp();
 
+}
+
+#if defined(KOKKOS_ENABLE_CUDA)
+template<typename T>
+using simd_t = simd::simd<T, simd::simd_abi::cuda_warp<32>>;
+using simd_float = typename simd_t<float>;
+using simd_double= typename simd_t<double>;
+
+#elif defined(KOKKOS_ENABLE_HIP)
+template<typename T>
+using simd_t = simd::simd<T, simd::simd_abi::hip_waverfront<32>>;
+using simd_float = typename simd_t<float>;
+using simd_double= typename simd_t<double>;
+#elif defined(KOKKOS_ENABLE_OPENMP)
+template<typename T>
+using simd_t = simd::simd<T, simd::simd_abi::native>;
+using simd_float = typename simd_t<float>;
+using simd_double= typename simd_t<double>;
+#elif defined(KOKKOS_ENABLE_OPENMPTARGET)
+template<typename T>
+using simd_t = simd::simd<T, simd::simd_abi::native>;
+using simd_float = typename simd_t<float>;
+using simd_double= typename simd_t<double>;
+#endif
+
+void testLatColorMatrixSimd(void)
+{
+  using storage=typename Kokkos::View<simd_float::storage_type*[3][3], TestMemSpace>;
+
+  storage ref_storage("ref",20);
+  OLattice< PScalarLocal< PMatrixLocal< RScalarLocal<simd_float>, 3> >, TestMemSpace> latcm(20);
+
+  auto N=simd_float::size();
+
+  Kokkos::parallel_for(20, KOKKOS_LAMBDA( const size_t site){
+      for(int i=0; i < 3; ++i) {
+	for(int j=0; j < 3; ++j ) {
+	  for(int k=0; k < N; ++k ) {
+	    ref_storage(site,i,j)[k] = static_cast<float>( k+N*( site + 20*(i + 3*j)));
+	}
+      }
+    });
+	  
+
+    Kokkos::parallel_for("FIll SIMD", Kokkos::TeamPolicy<>(20,1,simd_float::size()),
+			 KOKKOS_LAMBDA(const Kokkos::TeamPolicy<>::member_type& team) {
+			   const int site = team.league_rank();
+			   simd_float::storage_type fred;
+			   for(int i=0; i < 3; ++i) {
+			     for(int j=0; j < 3; ++j ) { 
+			       for(int k=0; k < N; k++) {
+				 fred[k] = static_cast<float>(k + N*( site + 20*(i + 3*j)));
+			       } 
+			       latcm.elem(site).elem().elem(i,j).elem() = simd_float(fred);
+			     }
+			   }
+			 });
+			
+	Kokkos::fence();
+
+
+	for(int site=0; site < 20; site++) {
+		for(int i=0; i < 3; ++i) {
+			for(int j=0; j < 3; ++j ) {
+				ref_storage(site,i,j) = static_cast<float>( site + 20*(i + 3*j));
+				latcm.elem(site).elem().elem(i,j).elem() = static_cast<float>( site + 20*(i + 3*j));
+			}
+		}
+
+		}
+}
+
+TEST(Test3, testLatColMatrix)
+{
+	testLatColorMatrix();
 }

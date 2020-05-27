@@ -7,10 +7,11 @@
 
 using namespace Playground;
 
-constexpr size_t Lx = 32;
-constexpr size_t Ly = 32;
-constexpr size_t Lz = 32;
-constexpr size_t Lt = 32;
+constexpr size_t L = 64;
+constexpr size_t Lx = L;
+constexpr size_t Ly = L;
+constexpr size_t Lz = L;
+constexpr size_t Lt = L;
 constexpr size_t Lxh = Lx/2;
 
 constexpr size_t Vcb = Lxh*Ly*Lz*Lt;

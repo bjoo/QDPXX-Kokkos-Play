@@ -8,6 +8,8 @@
 #pragma once
 
 #include "Kokkos_Core.hpp"
+#include "simd.hpp"
+
 namespace Playground {
 
 using KokkosIndices = Kokkos::Array<size_t,8>;
@@ -212,6 +214,72 @@ RScalar<T,ViewType,NumDims>& RScalar<T,ViewType,NumDims>::operator=(const RScala
 	(*this).elem() = local_in.elem();
 	return (*this);
 }
+
+  // SIMD Specialization
+// A thread local RScalar
+// with compact storage
+  template<typename T, typename Abi >
+  struct RScalarLocal< simd::simd<T,Abi> > {
+    
+    using simd_t = simd::simd<T,Abi>;
+    using simd_storage_t = typename simd_t::storage_type;
+
+    // The Data
+    simd_t _data;
+
+    // Use array type following Kokkos convention
+    using array_type = simd_storage_t;
+
+    template<typename ViewType, size_t NumDims=1>
+    using GlobalType = RScalar<simd_storage_t,ViewType,NumDims>;
+
+    KOKKOS_INLINE_FUNCTION
+    RScalarLocal(void) {}
+
+    // Initialize with the data
+    KOKKOS_INLINE_FUNCTION
+    RScalarLocal(const simd_t& data_in) : _data(data_in) {};
+
+
+    // Init from an RScalarView (this is known
+    template<typename ViewType, size_t N>
+    RScalarLocal(const RScalar<simd_storage_t,ViewType,N>& view_in) : _data(simd_t(view_in.elem())) {};
+
+
+    template<typename ViewType, size_t N>
+    KOKKOS_INLINE_FUNCTION
+    RScalarLocal<simd_t>& operator=(const RScalar<simd_storage_t,ViewType,N>& view_in) {
+      (*this).elem()=simd_t(view_in.elem());
+      return (*this);
+    }
+
+    // Const getter
+    KOKKOS_INLINE_FUNCTION
+    const simd_t& elem() const {
+      return _data;
+    }
+
+    // setter
+    KOKKOS_INLINE_FUNCTION
+    simd_t& elem() {
+      return _data;
+    }
+};
+
+  template<typename T, typename Abi, typename ViewType, size_t NumDims>
+  KOKKOS_INLINE_FUNCTION
+  RScalar<typename simd::simd<T,Abi>::storage_type, ViewType,NumDims>::RScalar( const RScalarLocal< simd::simd<T,Abi> >& local_in ) {
+	(*this).elem() = local_in.elem();
+}
+
+    template<typename T, typename Abi, typename ViewType,  size_t NumDims>
+KOKKOS_INLINE_FUNCTION
+    RScalar<typename<simd::simd<T,Abi>::storage_type, ViewType,NumDims>& RScalar<T,ViewType,NumDims>::operator=(const RScalarLocal<simd::simd<T,Abi>>& local_in ) {
+	(*this).elem() = local_in.elem();
+	return (*this);
+}
+
+  //---
 
 template<typename T>
 struct RComplexLocal;
@@ -730,6 +798,8 @@ struct LocalType<ptrdiff_t> {
 	using type=ptrdiff_t;
 };
 
+
+
 // The local type of a view type is its local type at this level templated
 // on the local type of its substructure.
 // is its local type templated on the terminal type (float etc0)
@@ -737,6 +807,14 @@ template<typename T, typename ViewType, size_t NumDims>
 struct LocalType< RScalar<T, ViewType, NumDims> > {
 	using type =  RScalarLocal<typename LocalType<T>::type>;
 };
+
+  template<typename T, typename Abi, typename ViewType, size_t NumDims>
+  struct LocalType< RScalar< typename simd::simd<T,Abi>::storage_type, ViewType, NumDims > > {
+    using type = RScalarLocal< simd::simd<T,Abi> >;
+  }
+
+
+
 
 template<typename T, typename ViewType, size_t ParentNumDims>
 struct LocalType< RComplex<T, ViewType, ParentNumDims> > {
@@ -829,6 +907,11 @@ template<>
 struct BaseType<ptrdiff_t> {
 	using type=ptrdiff_t;
 };
+
+  template<typename T, typename Abi>
+  struct BaseType< simd::simd<T.Abi> > {
+    using type = T;
+  }
 
 template<typename T, typename ViewType, size_t ParentNumDims>
 struct BaseType< RScalar<T,ViewType,ParentNumDims> > {
