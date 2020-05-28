@@ -7,7 +7,7 @@
 
 using namespace Playground;
 
-constexpr size_t L = 8;
+constexpr size_t L = 44;
 constexpr size_t Lx = L;
 constexpr size_t Ly = L;
 constexpr size_t Lz = L;
@@ -116,14 +116,14 @@ TEST(TestBW, TestSpinorAddBW)
 #if defined(KOKKOS_ENABLE_CUDA)
 template<typename T>
 using simd_t = simd::simd<T, simd::simd_abi::cuda_warp<32>>;
-using simd_float = typename simd_t<float>;
-using simd_double= typename simd_t<double>;
+using simd_float = simd_t<float>;
+using simd_double= simd_t<double>;
 
 #elif defined(KOKKOS_ENABLE_HIP)
 template<typename T>
-using simd_t = simd::simd<T, simd::simd_abi::hip_waverfront<32>>;
-using simd_float = typename simd_t<float>;
-using simd_double= typename simd_t<double>;
+using simd_t = simd::simd<T, simd::simd_abi::hip_wavefront<64>>;
+using simd_float = simd_t<float>;
+using simd_double= simd_t<double>;
 #elif defined(KOKKOS_ENABLE_OPENMP)
 template<typename T>
 using simd_t = simd::simd<T, simd::simd_abi::native>;
@@ -132,8 +132,8 @@ using simd_double= simd_t<double>;
 #elif defined(KOKKOS_ENABLE_OPENMPTARGET)
 template<typename T>
 using simd_t = simd::simd<T, simd::simd_abi::native>;
-using simd_float = typename simd_t<float>;
-using simd_double= typename simd_t<double>;
+using simd_float = simd_t<float>;
+using simd_double= simd_t<double>;
 #endif
 void testSpinorAddBWSIMD(void)
 {

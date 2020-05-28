@@ -336,27 +336,29 @@ auto operator+( const OLattice<T,MemSpace> l, const OLattice<T,MemSpace>& r) {
 template<typename T, class MemSpace, typename Expr, typename BaseType>
 struct Evaluate {
 
-	KOKKOS_INLINE_FUNCTION
-	void operator()(OLattice<T,MemSpace>& dest, const Expr& expression, const std::size_t range ) const {
-	Kokkos::parallel_for("evaluate_olattice",range,KOKKOS_LAMBDA(const size_t site) {
-		dest.elem(site) = expression(site);
-	});
+	inline
+	void execute(OLattice<T,MemSpace>& dest, const Expr& expression, const std::size_t range ) const {
+	     Kokkos::parallel_for("evaluate_olattice",range,KOKKOS_LAMBDA(const size_t site) {
+                dest.elem(site) = expression(site);
+        });
 }
 };
 
 template<typename T, class MemSpace, typename Expr, typename T2, typename Abi>
 struct Evaluate<T, MemSpace, Expr, simd::simd<T2,Abi> > {
-
-	KOKKOS_INLINE_FUNCTION
-	void operator()(OLattice<T,MemSpace>& dest, const Expr& expression, const std::size_t range ) const {
-		//std::cout << "SIMD PF" << std::endl;
-	Kokkos::parallel_for("evaluate_olattice_simd", Kokkos::TeamPolicy<>(range, 1, simd::simd<T2,Abi>::size()),
-			KOKKOS_LAMBDA(const Kokkos::TeamPolicy<>::member_type& team) {
-				size_t site = team.league_rank();
-				dest.elem(site) = expression(site);
-	});
-
-}
+ 
+  inline	
+  void execute(OLattice<T,MemSpace>& dest, const Expr& expression, const std::size_t range ) const {
+    
+    //std::cout << "SIMD PF" << std::endl;
+    Kokkos::parallel_for("evaluate_olattice_simd", 
+			 Kokkos::TeamPolicy<>(range, 1, simd::simd<T2,Abi>::size()),
+			 KOKKOS_LAMBDA(const Kokkos::TeamPolicy<>::member_type& team) {
+			   size_t site = team.league_rank();
+			   dest.elem(site) = expression(site);
+			 });
+    
+  }
 };
 
 template<typename T, class MemSpace, typename Expr>
@@ -365,8 +367,8 @@ void evaluate(OLattice<T,MemSpace>& dest, const Expr& expression ) {
 	const std::size_t n_sites= dest.num_elem();
 
 	using base_type_t = typename BaseType<T>::type;
-	Evaluate<T, MemSpace, Expr, base_type_t> evaluator;
-	evaluator(dest,expression, n_sites);
+	Evaluate<T, MemSpace, Expr, base_type_t> launcher;
+	launcher.execute(dest,expression, n_sites);
 }
 
 

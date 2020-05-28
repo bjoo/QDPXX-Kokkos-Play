@@ -339,14 +339,14 @@ TEST(Test3, TestLatPropProp)
 #if defined(KOKKOS_ENABLE_CUDA)
 template<typename T>
 using simd_t = simd::simd<T, simd::simd_abi::cuda_warp<32>>;
-using simd_float = typename simd_t<float>;
-using simd_double= typename simd_t<double>;
+using simd_float = simd_t<float>;
+using simd_double= simd_t<double>;
 
 #elif defined(KOKKOS_ENABLE_HIP)
 template<typename T>
-using simd_t = simd::simd<T, simd::simd_abi::hip_waverfront<32>>;
-using simd_float = typename simd_t<float>;
-using simd_double= typename simd_t<double>;
+using simd_t = simd::simd<T, simd::simd_abi::hip_wavefront<64>>;
+using simd_float = simd_t<float>;
+using simd_double= simd_t<double>;
 #elif defined(KOKKOS_ENABLE_OPENMP)
 template<typename T>
 using simd_t = simd::simd<T, simd::simd_abi::native>;
@@ -355,8 +355,8 @@ using simd_double= simd_t<double>;
 #elif defined(KOKKOS_ENABLE_OPENMPTARGET)
 template<typename T>
 using simd_t = simd::simd<T, simd::simd_abi::native>;
-using simd_float = typename simd_t<float>;
-using simd_double= typename simd_t<double>;
+using simd_float = simd_t<float>;
+using simd_double= simd_t<double>;
 #endif
 
 
@@ -430,15 +430,19 @@ void testLatColorComplexMatrixSimd(void)
 
   auto N=simd_float::size();
 
-  Kokkos::parallel_for(20, KOKKOS_LAMBDA( const size_t site){
-	  for(int i=0; i < 3; ++i) {
-		  for(int j=0; j < 3; ++j ) {
-			  for(int k=0; k < N; ++k ) {
-				  ref_storage(site,i,j,0)[k] = static_cast<float>( k+N*(0 + 2*(site + 20*(i + 3*j))));
-				  ref_storage(site,i,j,1)[k] = static_cast<float>( k+N*(1 + 2*(site + 20*(i + 3*j))));
-			  }
-		  }
-	  }
+
+  Kokkos::parallel_for("FIll SIMD", Kokkos::TeamPolicy<>(20,1,simd_float::size()),
+		  KOKKOS_LAMBDA(const Kokkos::TeamPolicy<>::member_type& team) {
+			 const int site = team.league_rank();
+ 
+			 for(int i=0; i < 3; ++i) {
+			   for(int j=0; j < 3; ++j ) {
+			     Kokkos::parallel_for(Kokkos::ThreadVectorRange(team,N),[&](const int k) { 
+			       ref_storage(site,i,j,0)[k] = static_cast<float>( k+N*(0 + 2*(site + 20*(i + 3*j))));
+			       ref_storage(site,i,j,1)[k] = static_cast<float>( k+N*(1 + 2*(site + 20*(i + 3*j))));
+			       });
+			   }
+			 }
   });
 
 
