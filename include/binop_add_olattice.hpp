@@ -218,6 +218,44 @@ struct _plus {
 		return add_cmplx<decltype(l),decltype(r)>(l,r);
 	}
 
+	// SIMD: Complex: view + view
+	template<typename T, typename Abi, typename V, size_t ParentNumDims>
+	KOKKOS_INLINE_FUNCTION
+	auto operator()(const RComplex<simd::simd<T,Abi>,V,ParentNumDims>& l,
+			        const RComplex<simd::simd<T,Abi>,V,ParentNumDims>& r) const {
+		using simd_t = simd::simd<T,Abi>;
+		using LT = RComplexLocal< simd_t >;
+		return LT( simd_t(l.real()) + simd_t(r.real()), simd_t(l.imag()) + simd_t(r.imag()) );
+	}
+
+	// SIMD: Complex: local + view
+	template<typename T,typename Abi, typename V, size_t ParentNumDims>
+	KOKKOS_INLINE_FUNCTION
+	auto operator()(const RComplexLocal< simd::simd<T,Abi> >& l,
+			const RComplex<simd::simd<T,Abi>,V,ParentNumDims>& r) const {
+		using simd_t = simd::simd<T,Abi>;
+		using LT = RComplexLocal< simd_t >;
+		return LT( l.real() + simd_t(r.real()), l.imag() + simd_t(r.imag()) );
+	}
+
+	//SIMD: Complex: view + local
+	template<typename T, typename Abi, typename V, size_t ParentNumDims>
+	KOKKOS_INLINE_FUNCTION
+	auto operator()(const RComplex<simd::simd<T,Abi>,V,ParentNumDims>& l,
+			const RComplexLocal<simd::simd<T,Abi> >& r) const {
+		using simd_t = simd::simd<T,Abi>;
+		using LT = RComplexLocal< simd_t >;
+		return LT( simd_t(l.real()) +r.real(), simd_t(l.imag()) + r.imag() );
+	}
+
+	// SIMD: Complex: local + local -- should be OK since both left and right elem()-s return simd_type
+	template<typename T, typename Abi>
+	KOKKOS_INLINE_FUNCTION
+	auto operator()(const RComplexLocal< simd::simd<T,Abi> >& l,
+			const RComplexLocal<simd::simd<T,Abi> >& r) const {
+		return add_cmplx<decltype(l),decltype(r)>(l,r);
+	}
+
 	// -------------------------------------------------------
 	// RScalar
 	// -------------------------------------------------------
@@ -295,14 +333,40 @@ auto operator+( const OLattice<T,MemSpace> l, const OLattice<T,MemSpace>& r) {
 							OLeaf<OLattice<T,MemSpace>>(l), OLeaf<OLattice<T,MemSpace>>(r));
 }
 
+template<typename T, class MemSpace, typename Expr, typename BaseType>
+struct Evaluate {
+
+	KOKKOS_INLINE_FUNCTION
+	void operator()(OLattice<T,MemSpace>& dest, const Expr& expression, const std::size_t range ) const {
+	Kokkos::parallel_for("evaluate_olattice",range,KOKKOS_LAMBDA(const size_t site) {
+		dest.elem(site) = expression(site);
+	});
+}
+};
+
+template<typename T, class MemSpace, typename Expr, typename T2, typename Abi>
+struct Evaluate<T, MemSpace, Expr, simd::simd<T2,Abi> > {
+
+	KOKKOS_INLINE_FUNCTION
+	void operator()(OLattice<T,MemSpace>& dest, const Expr& expression, const std::size_t range ) const {
+		//std::cout << "SIMD PF" << std::endl;
+	Kokkos::parallel_for("evaluate_olattice_simd", Kokkos::TeamPolicy<>(range, 1, simd::simd<T2,Abi>::size()),
+			KOKKOS_LAMBDA(const Kokkos::TeamPolicy<>::member_type& team) {
+				size_t site = team.league_rank();
+				dest.elem(site) = expression(site);
+	});
+
+}
+};
+
 template<typename T, class MemSpace, typename Expr>
 void evaluate(OLattice<T,MemSpace>& dest, const Expr& expression ) {
 
 	const std::size_t n_sites= dest.num_elem();
-	Kokkos::parallel_for("evaluate_olattice",n_sites,KOKKOS_LAMBDA(const size_t site) {
-		dest.elem(site) = expression(site);
-	});
-	Kokkos::fence(); // Apparently this is needed for consistency in UVM space
+
+	using base_type_t = typename BaseType<T>::type;
+	Evaluate<T, MemSpace, Expr, base_type_t> evaluator;
+	evaluator(dest,expression, n_sites);
 }
 
 

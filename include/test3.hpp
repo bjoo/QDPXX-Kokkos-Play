@@ -116,6 +116,9 @@ struct LocalType;
 template<typename T>
 struct RScalarLocal;
 
+template<typename T, typename Abi>
+struct RScalarLocal<simd::simd<T,Abi>>;
+
 // The view based type
 template<typename T, typename ViewType, size_t ParentNumDims=1>
 struct RScalar {
@@ -152,6 +155,45 @@ struct RScalar {
     return _idx(_data,_indices);
   }
 
+};
+
+// The view based type
+template<typename T, typename Abi, typename ViewType, size_t ParentNumDims>
+struct RScalar< simd::simd<T,Abi>, ViewType, ParentNumDims > {
+
+  // This is a view which should be ok on device
+  ViewType _data;
+  using simd_type = simd::simd<T,Abi>;
+  using storage_type = typename simd::simd<T,Abi>::storage_type;
+
+  // The indices already frozen
+  KokkosIndices _indices;
+  Indexer<ViewType, ParentNumDims> _idx;
+
+  // Construct from a view and fixed indices
+  KOKKOS_INLINE_FUNCTION
+  RScalar(ViewType data_in, KokkosIndices indices) : _data(data_in), _indices(indices), _idx() {};
+
+  // Construct from a view (assume indices are all 0) -- most for testing purposes
+  KOKKOS_INLINE_FUNCTION
+  RScalar(ViewType data_in) : _data(data_in), _indices{0,0,0,0,0,0,0,0}, _idx(){}
+
+  // Construct from RScalarLocal
+  // Forward declare since RScalarLocal is incomplete
+  KOKKOS_FUNCTION
+  RScalar(const RScalarLocal<simd_type>& t);
+
+  // Op assign from
+  KOKKOS_FUNCTION
+  RScalar& operator=(const RScalarLocal<simd_type>& t );
+
+  // View types cannot be default initialized
+  RScalar() = delete;
+
+  KOKKOS_INLINE_FUNCTION
+  storage_type& elem() const {
+    return _idx(_data,_indices);
+  }
 };
 
 
@@ -202,6 +244,73 @@ struct RScalarLocal {
 	}
 };
 
+// A thread local RScalar
+// with compact storage
+template<typename T, typename Abi>
+struct RScalarLocal< simd::simd<T,Abi> > {
+
+	// The Data
+	using simd_t = simd::simd<T,Abi>;
+	using storage_t = typename simd::simd<T,Abi>::storage_type;
+
+	simd_t _data;
+
+	// Use array type following Kokkos convention
+	using array_type = storage_t;
+
+	template<typename ViewType, size_t NumDims=1>
+	using GlobalType = RScalar<simd_t,ViewType,NumDims>;
+
+	KOKKOS_INLINE_FUNCTION
+	RScalarLocal(void) {}
+
+	// Initialize with the data
+	KOKKOS_INLINE_FUNCTION
+	RScalarLocal(const simd_t& data_in) : _data(data_in) {};
+
+	KOKKOS_INLINE_FUNCTION
+	RScalarLocal(const storage_t& data_in) : _data(simd_t(data_in)) {};
+
+
+	KOKKOS_INLINE_FUNCTION
+	RScalarLocal<simd_t>& operator=(const simd_t& in) {
+		(*this)._data = in;
+		return *this;
+	}
+
+	KOKKOS_INLINE_FUNCTION
+	RScalarLocal<simd_t>& operator=(const storage_t& in) {
+		(*this)._data = simd_t(in);
+		return *this;
+	}
+
+	// Initialize with the data
+
+	// Init from an RScalarView (this is known
+	template<typename ViewType, size_t N>
+	RScalarLocal(const RScalar<simd_t,ViewType,N>& view_in) : _data(view_in.elem()) {};
+
+
+	template<typename ViewType, size_t N>
+	KOKKOS_INLINE_FUNCTION
+	RScalarLocal<simd_t>& operator=(const RScalar<simd_t,ViewType,N>& view_in) {
+		(*this).elem()=view_in.elem();
+		return (*this);
+	}
+
+	// Const getter
+	KOKKOS_INLINE_FUNCTION
+	const simd_t& elem() const {
+	  return _data;
+	}
+
+	// setter
+	KOKKOS_INLINE_FUNCTION
+	simd_t& elem() {
+		return _data;
+	}
+};
+
 template<typename T, typename ViewType, size_t NumDims>
 KOKKOS_INLINE_FUNCTION
 RScalar<T,ViewType,NumDims>::RScalar( const RScalarLocal<T>& local_in ) {
@@ -215,74 +324,27 @@ RScalar<T,ViewType,NumDims>& RScalar<T,ViewType,NumDims>::operator=(const RScala
 	return (*this);
 }
 
-  // SIMD Specialization
-// A thread local RScalar
-// with compact storage
-  template<typename T, typename Abi >
-  struct RScalarLocal< simd::simd<T,Abi> > {
-    
-    using simd_t = simd::simd<T,Abi>;
-    using simd_storage_t = typename simd_t::storage_type;
-
-    // The Data
-    simd_t _data;
-
-    // Use array type following Kokkos convention
-    using array_type = simd_storage_t;
-
-    template<typename ViewType, size_t NumDims=1>
-    using GlobalType = RScalar<simd_storage_t,ViewType,NumDims>;
-
-    KOKKOS_INLINE_FUNCTION
-    RScalarLocal(void) {}
-
-    // Initialize with the data
-    KOKKOS_INLINE_FUNCTION
-    RScalarLocal(const simd_t& data_in) : _data(data_in) {};
-
-
-    // Init from an RScalarView (this is known
-    template<typename ViewType, size_t N>
-    RScalarLocal(const RScalar<simd_storage_t,ViewType,N>& view_in) : _data(simd_t(view_in.elem())) {};
-
-
-    template<typename ViewType, size_t N>
-    KOKKOS_INLINE_FUNCTION
-    RScalarLocal<simd_t>& operator=(const RScalar<simd_storage_t,ViewType,N>& view_in) {
-      (*this).elem()=simd_t(view_in.elem());
-      return (*this);
-    }
-
-    // Const getter
-    KOKKOS_INLINE_FUNCTION
-    const simd_t& elem() const {
-      return _data;
-    }
-
-    // setter
-    KOKKOS_INLINE_FUNCTION
-    simd_t& elem() {
-      return _data;
-    }
-};
-
-  template<typename T, typename Abi, typename ViewType, size_t NumDims>
-  KOKKOS_INLINE_FUNCTION
-  RScalar<typename simd::simd<T,Abi>::storage_type, ViewType,NumDims>::RScalar( const RScalarLocal< simd::simd<T,Abi> >& local_in ) {
+template<typename T,typename Abi, typename ViewType, size_t NumDims>
+KOKKOS_INLINE_FUNCTION
+RScalar<simd::simd<T,Abi>,ViewType,NumDims>::RScalar( const RScalarLocal< simd::simd<T,Abi> >& local_in ) {
 	(*this).elem() = local_in.elem();
 }
 
-    template<typename T, typename Abi, typename ViewType,  size_t NumDims>
+template<typename T, typename Abi, typename ViewType,  size_t NumDims>
 KOKKOS_INLINE_FUNCTION
-    RScalar<typename<simd::simd<T,Abi>::storage_type, ViewType,NumDims>& RScalar<T,ViewType,NumDims>::operator=(const RScalarLocal<simd::simd<T,Abi>>& local_in ) {
+RScalar<simd::simd<T,Abi>,ViewType,NumDims>& RScalar<simd::simd<T,Abi>,ViewType,NumDims>::operator=(const RScalarLocal<simd::simd<T,Abi>>& local_in ) {
 	(*this).elem() = local_in.elem();
 	return (*this);
 }
 
-  //---
+
 
 template<typename T>
 struct RComplexLocal;
+
+template<typename T, typename Abi>
+struct RComplexLocal< simd::simd<T,Abi> >;
+
 
 template<typename T, typename ViewType, size_t ParentNumDims >
 struct RComplex {
@@ -296,6 +358,7 @@ struct RComplex {
 
 	// View Types Cannot be Default constructed
 	RComplex() = delete;
+
 
 	// Forward declare these since RComplexLocal is only
 	// forward declared
@@ -319,6 +382,50 @@ struct RComplex {
 		new_idx[ ParentNumDims ] = 1;
 		return _idx(_data, new_idx );
 	}
+
+};
+
+template<typename T, typename Abi, typename ViewType, size_t ParentNumDims >
+struct RComplex< simd::simd<T,Abi>, ViewType, ParentNumDims > {
+	ViewType _data;
+	KokkosIndices _indices;
+	Indexer<ViewType, ParentNumDims+1> _idx;       // Num dims is of the parent. I have 1 extra
+
+	using simd_type = simd::simd<T,Abi>;
+	using storage_type = typename simd::simd<T,Abi>::storage_type;
+
+	KOKKOS_INLINE_FUNCTION
+	RComplex(ViewType data_in, KokkosIndices indices) : _data(data_in), _indices(indices), _idx() {};
+
+	// View Types Cannot be Default constructed
+	RComplex() = delete;
+
+
+
+	// Forward declare these since RComplexLocal is only
+	// forward declared
+	KOKKOS_FUNCTION
+	RComplex(const RComplexLocal<simd_type>& in);
+
+	KOKKOS_FUNCTION
+	RComplex& operator=(const RComplexLocal<simd_type>& in);
+
+	// Getters and Setters
+	KOKKOS_INLINE_FUNCTION
+	storage_type& real() const {
+		KokkosIndices new_idx(_indices);
+		new_idx[ ParentNumDims ] = 0;
+		return _idx(_data, new_idx );
+	}
+
+	KOKKOS_INLINE_FUNCTION
+	storage_type& imag() const {
+		KokkosIndices new_idx(_indices);
+		new_idx[ ParentNumDims ] = 1;
+		return _idx(_data, new_idx );
+	}
+
+
 
 };
 
@@ -375,6 +482,80 @@ struct RComplexLocal {
 
 };
 
+// ThreadLocal Type
+template<typename T, typename Abi >
+struct RComplexLocal< simd::simd<T,Abi> > {
+
+	using simd_t = simd::simd<T,Abi>;
+	using storage_t = typename simd::simd<T,Abi>::storage_type;
+	simd_t _data[2];
+
+	using array_type = storage_t[2];
+
+	// IdxPos is the last index of the parent
+	// NumDims is the total number of dimensions
+	template<typename ViewType, size_t ParentNumDims >
+	using GlobalType = RComplex<simd_t,ViewType,ParentNumDims>;
+
+	KOKKOS_INLINE_FUNCTION
+	RComplexLocal() {}
+
+	KOKKOS_INLINE_FUNCTION
+	RComplexLocal( const simd_t& re, const simd_t& im ) : _data{re,im} {}
+
+	RComplexLocal( const storage_t& re, const storage_t& im) : _data{ simd_t(re), simd_t(im) } {}
+
+
+	template<typename ViewType, size_t ParentNumDims>
+	KOKKOS_INLINE_FUNCTION
+	RComplexLocal( const RComplex<simd_t,ViewType,ParentNumDims>& in) : _data{ simd_t(in.real()), simd_t(in.imag()) } {}
+
+	template<typename ViewType, size_t ParentNumDims >
+	KOKKOS_INLINE_FUNCTION
+	RComplexLocal& operator=(const RComplex<simd_t,ViewType,ParentNumDims>& in) {
+		_data[0] = simd_t(in.real());
+		_data[1] = simd_t(in.imag());
+		return (*this);
+ 	}
+
+	KOKKOS_INLINE_FUNCTION
+	const simd_t& real() const {
+		return _data[0];
+	}
+
+	KOKKOS_INLINE_FUNCTION
+	simd_t& real() {
+		return _data[0];
+	}
+
+	KOKKOS_INLINE_FUNCTION
+	const simd_t& imag() const {
+		return _data[1];
+	}
+
+	KOKKOS_INLINE_FUNCTION
+	simd_t& imag() {
+		return _data[1];
+	}
+
+
+};
+
+
+
+template<typename T, typename Abi, typename ViewType,  size_t ParentNumDims >
+KOKKOS_INLINE_FUNCTION
+RComplex<simd::simd<T,Abi>,ViewType,ParentNumDims>::RComplex( const RComplexLocal<simd::simd<T,Abi>>& in ) : _data{in.real(),in.imag()} {}
+
+template<typename T, typename Abi, typename ViewType, size_t ParentNumDims >
+KOKKOS_INLINE_FUNCTION
+RComplex<simd::simd<T,Abi>,ViewType,ParentNumDims>&
+RComplex<simd::simd<T,Abi>,ViewType,ParentNumDims>::operator=(const RComplexLocal<simd::simd<T,Abi>>& in ) {
+	(*this).real() = in.real();
+	(*this).imag() = in.imag();
+	return (*this);
+}
+
 template<typename T, typename ViewType,  size_t ParentNumDims >
 KOKKOS_INLINE_FUNCTION
 RComplex<T,ViewType,ParentNumDims>::RComplex( const RComplexLocal<T>& in ) : _data{in.real(),in.imag()} {}
@@ -388,7 +569,6 @@ RComplex<T,ViewType,ParentNumDims>::operator=(const RComplexLocal<T>& in ) {
 	return (*this);
 
 }
-
 
 // Forward declar  local type
 template<typename T>
@@ -809,9 +989,9 @@ struct LocalType< RScalar<T, ViewType, NumDims> > {
 };
 
   template<typename T, typename Abi, typename ViewType, size_t NumDims>
-  struct LocalType< RScalar< typename simd::simd<T,Abi>::storage_type, ViewType, NumDims > > {
+  struct LocalType< RScalar< simd::simd<T,Abi>, ViewType, NumDims > > {
     using type = RScalarLocal< simd::simd<T,Abi> >;
-  }
+  };
 
 
 
@@ -819,6 +999,11 @@ struct LocalType< RScalar<T, ViewType, NumDims> > {
 template<typename T, typename ViewType, size_t ParentNumDims>
 struct LocalType< RComplex<T, ViewType, ParentNumDims> > {
 	using type = RComplexLocal<typename LocalType<T>::type>;
+};
+
+template<typename T, typename Abi, typename ViewType, size_t NumDims>
+struct LocalType< RComplex< simd::simd<T,Abi>, ViewType, NumDims > > {
+  using type = RComplexLocal< simd::simd<T,Abi> >;
 };
 
 
@@ -908,15 +1093,20 @@ struct BaseType<ptrdiff_t> {
 	using type=ptrdiff_t;
 };
 
-  template<typename T, typename Abi>
-  struct BaseType< simd::simd<T.Abi> > {
-    using type = T;
-  }
-
+template<typename T, typename Abi>
+struct BaseType<simd::simd<T,Abi> > {
+	using type=simd::simd<T,Abi>;
+};
 template<typename T, typename ViewType, size_t ParentNumDims>
 struct BaseType< RScalar<T,ViewType,ParentNumDims> > {
 	using type = typename BaseType<T>::type;
 };
+
+template<typename T, typename Abi, typename ViewType, size_t ParentNumDims>
+struct BaseType< RScalar<simd::simd<T,Abi>,ViewType,ParentNumDims> > {
+	using type = simd::simd<T,Abi>;
+};
+
 
 template<typename T>
 struct BaseType< RScalarLocal<T> >  {
@@ -926,6 +1116,11 @@ struct BaseType< RScalarLocal<T> >  {
 template<typename T, typename ViewType, size_t ParentNumDims>
 struct BaseType< RComplex<T,ViewType,ParentNumDims> > {
 	using type = typename BaseType<T>::type;
+};
+
+template<typename T, typename Abi, typename ViewType, size_t ParentNumDims>
+struct BaseType< RComplex<simd::simd<T,Abi>,ViewType,ParentNumDims> > {
+	using type = simd::simd<T,Abi>;
 };
 
 template<typename T>
@@ -962,6 +1157,20 @@ template<typename T, size_t N>
 struct BaseType< PMatrixLocal<T,N> > {
 	using type = typename BaseType<T>::type;
 };
+
+template<typename T>
+struct IsSIMD;
+
+template<typename T, typename Abi>
+struct IsSIMD< simd::simd<T,Abi> > {
+	static constexpr bool value = true;
+};
+
+template<typename T>
+struct IsSIMD {
+	static constexpr bool value = false;
+};
+
 //
 //
 //

@@ -350,14 +350,15 @@ using simd_double= typename simd_t<double>;
 #elif defined(KOKKOS_ENABLE_OPENMP)
 template<typename T>
 using simd_t = simd::simd<T, simd::simd_abi::native>;
-using simd_float = typename simd_t<float>;
-using simd_double= typename simd_t<double>;
+using simd_float = simd_t<float>;
+using simd_double= simd_t<double>;
 #elif defined(KOKKOS_ENABLE_OPENMPTARGET)
 template<typename T>
 using simd_t = simd::simd<T, simd::simd_abi::native>;
 using simd_float = typename simd_t<float>;
 using simd_double= typename simd_t<double>;
 #endif
+
 
 void testLatColorMatrixSimd(void)
 {
@@ -369,44 +370,118 @@ void testLatColorMatrixSimd(void)
   auto N=simd_float::size();
 
   Kokkos::parallel_for(20, KOKKOS_LAMBDA( const size_t site){
-      for(int i=0; i < 3; ++i) {
-	for(int j=0; j < 3; ++j ) {
-	  for(int k=0; k < N; ++k ) {
-	    ref_storage(site,i,j)[k] = static_cast<float>( k+N*( site + 20*(i + 3*j)));
-	}
-      }
-    });
+	  for(int i=0; i < 3; ++i) {
+		  for(int j=0; j < 3; ++j ) {
+			  for(int k=0; k < N; ++k ) {
+				  ref_storage(site,i,j)[k] = static_cast<float>( k+N*( site + 20*(i + 3*j)));
+			  }
+		  }
+	  }
+  });
 	  
 
-    Kokkos::parallel_for("FIll SIMD", Kokkos::TeamPolicy<>(20,1,simd_float::size()),
-			 KOKKOS_LAMBDA(const Kokkos::TeamPolicy<>::member_type& team) {
-			   const int site = team.league_rank();
-			   simd_float::storage_type fred;
-			   for(int i=0; i < 3; ++i) {
-			     for(int j=0; j < 3; ++j ) { 
-			       for(int k=0; k < N; k++) {
-				 fred[k] = static_cast<float>(k + N*( site + 20*(i + 3*j)));
-			       } 
-			       latcm.elem(site).elem().elem(i,j).elem() = simd_float(fred);
-			     }
-			   }
-			 });
+  Kokkos::parallel_for("FIll SIMD", Kokkos::TeamPolicy<>(20,1,simd_float::size()),
+		  KOKKOS_LAMBDA(const Kokkos::TeamPolicy<>::member_type& team) {
+	  const int site = team.league_rank();
+	  simd_float::storage_type fred;
+	  for(int i=0; i < 3; ++i) {
+		  for(int j=0; j < 3; ++j ) {
+			  Kokkos::parallel_for(Kokkos::ThreadVectorRange(team,N),[&](const int k) {
+				  latcm.elem(site).elem().elem(i,j).elem()[k] = static_cast<float>(k + N*( site + 20*(i + 3*j)));
+			  });
+		  }
+	  }
+  });
 			
 	Kokkos::fence();
 
+	// Create host mirrors
+	auto ref_mirror = Kokkos::create_mirror(ref_storage);
+	auto lat_mirror = Kokkos::create_mirror(latcm._data);
+	Kokkos::deep_copy(ref_mirror, ref_storage);
+	Kokkos::deep_copy(lat_mirror, latcm._data);
 
-	for(int site=0; site < 20; site++) {
+	Kokkos::View<float****> ref_scalar((float*)ref_mirror.data(),20,3,3,simd_float::size());
+	Kokkos::View<float****> lcm_scalar((float*)lat_mirror.data(),20,3,3,simd_float::size());
+	for(int site=0; site < 20; ++site) {
 		for(int i=0; i < 3; ++i) {
-			for(int j=0; j < 3; ++j ) {
-				ref_storage(site,i,j) = static_cast<float>( site + 20*(i + 3*j));
-				latcm.elem(site).elem().elem(i,j).elem() = static_cast<float>( site + 20*(i + 3*j));
+			for(int j=0; j < 3; ++j) {
+				for(int k=0; k < 3; ++k) {
+					ASSERT_FLOAT_EQ( ref_scalar(site,i,j,k), lcm_scalar(site,i,j,k));
+					ASSERT_FLOAT_EQ( ref_scalar(site,i,j,k),  ref_mirror(site,i,j)[k]);
+				}
 			}
 		}
+	}
 
-		}
 }
 
-TEST(Test3, testLatColMatrix)
+TEST(Test3, testLatColMatrixSIMD)
 {
-	testLatColorMatrix();
+	testLatColorMatrixSimd();
+}
+
+void testLatColorComplexMatrixSimd(void)
+{
+  using storage=typename Kokkos::View<simd_float::storage_type*[3][3][2], TestMemSpace>;
+
+  storage ref_storage("ref",20);
+  OLattice< PScalarLocal< PMatrixLocal< RComplexLocal<simd_float>, 3> >, TestMemSpace> latcm(20);
+
+  auto N=simd_float::size();
+
+  Kokkos::parallel_for(20, KOKKOS_LAMBDA( const size_t site){
+	  for(int i=0; i < 3; ++i) {
+		  for(int j=0; j < 3; ++j ) {
+			  for(int k=0; k < N; ++k ) {
+				  ref_storage(site,i,j,0)[k] = static_cast<float>( k+N*(0 + 2*(site + 20*(i + 3*j))));
+				  ref_storage(site,i,j,1)[k] = static_cast<float>( k+N*(1 + 2*(site + 20*(i + 3*j))));
+			  }
+		  }
+	  }
+  });
+
+
+  Kokkos::parallel_for("FIll SIMD", Kokkos::TeamPolicy<>(20,1,simd_float::size()),
+		  KOKKOS_LAMBDA(const Kokkos::TeamPolicy<>::member_type& team) {
+	  const int site = team.league_rank();
+	  simd_float::storage_type fred;
+	  for(int i=0; i < 3; ++i) {
+		  for(int j=0; j < 3; ++j ) {
+			  Kokkos::parallel_for(Kokkos::ThreadVectorRange(team,N),[&](const int k) {
+				  latcm.elem(site).elem().elem(i,j).real()[k] = static_cast<float>(k + N*( 0 + 2*( site + 20*(i + 3*j))));
+				  latcm.elem(site).elem().elem(i,j).imag()[k] = static_cast<float>(k + N*( 1 + 2*( site + 20*(i + 3*j))));
+			  });
+		  }
+	  }
+  });
+
+	Kokkos::fence();
+
+	// Create host mirrors
+	auto ref_mirror = Kokkos::create_mirror(ref_storage);
+	auto lat_mirror = Kokkos::create_mirror(latcm._data);
+	Kokkos::deep_copy(ref_mirror, ref_storage);
+	Kokkos::deep_copy(lat_mirror, latcm._data);
+
+	Kokkos::View<float*****> ref_scalar((float*)ref_mirror.data(),20,3,3,2,simd_float::size());
+	Kokkos::View<float*****> lcm_scalar((float*)lat_mirror.data(),20,3,3,2,simd_float::size());
+	for(int site=0; site < 20; ++site) {
+		for(int i=0; i < 3; ++i) {
+			for(int j=0; j < 3; ++j) {
+				for(int k=0; k < 3; ++k) {
+					ASSERT_FLOAT_EQ( ref_scalar(site,i,j,0,k), lcm_scalar(site,i,j,0,k));
+					ASSERT_FLOAT_EQ( ref_scalar(site,i,j,1,k), lcm_scalar(site,i,j,1,k));
+					ASSERT_FLOAT_EQ( ref_scalar(site,i,j,0,k),  ref_mirror(site,i,j,0)[k]);
+					ASSERT_FLOAT_EQ( ref_scalar(site,i,j,1,k),  ref_mirror(site,i,j,1)[k]);
+				}
+			}
+		}
+	}
+
+}
+
+TEST(Test3, testLatColComplexMatrixSIMD)
+{
+	testLatColorComplexMatrixSimd();
 }
